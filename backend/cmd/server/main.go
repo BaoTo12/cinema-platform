@@ -6,14 +6,9 @@ import (
 	"net/http"
 	"os"
 
-	"connectrpc.com/connect"
 	"github.com/cinemaos/backend/internal/cache"
 	"github.com/cinemaos/backend/internal/database"
-	"github.com/cinemaos/backend/internal/middleware"
-	"github.com/cinemaos/backend/internal/services"
 	"github.com/joho/godotenv"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 )
 
 func main() {
@@ -42,23 +37,6 @@ func main() {
 	// Create HTTP mux
 	mux := http.NewServeMux()
 
-	// Create interceptors
-	interceptors := connect.WithInterceptors(middleware.AuthInterceptor())
-
-	// Register Connect RPC services
-	authService := services.NewAuthService()
-	moviesService := services.NewMoviesService()
-	showtimesService := services.NewShowtimesService()
-	bookingsService := services.NewBookingsService()
-	pricingService := services.NewPricingService()
-
-	// Register service handlers (these will be implemented)
-	mux.Handle(services.NewAuthServiceHandler(authService, interceptors))
-	mux.Handle(services.NewMoviesServiceHandler(moviesService, interceptors))
-	mux.Handle(services.NewShowtimesServiceHandler(showtimesService, interceptors))
-	mux.Handle(services.NewBookingsServiceHandler(bookingsService, interceptors))
-	mux.Handle(services.NewPricingServiceHandler(pricingService, interceptors))
-
 	// Health check endpoint
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -74,12 +52,12 @@ func main() {
 		port = "5000"
 	}
 
-	// Start server with HTTP/2 support
+	// Start server
 	addr := fmt.Sprintf(":%s", port)
 	log.Printf("🚀 Server starting on http://localhost%s", addr)
-	log.Printf("📡 Connect RPC services ready")
+	log.Printf("📡 Health check: http://localhost%s/health", addr)
 
-	if err := http.ListenAndServe(addr, h2c.NewHandler(handler, &http2.Server{})); err != nil {
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatal("Server failed to start:", err)
 	}
 }
