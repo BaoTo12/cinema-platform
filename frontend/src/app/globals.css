@@ -3,17 +3,12 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 98%;
+  * {
+    @apply border-gray-800;
   }
 
-  * {
-    @apply border-border;
-  }
-  
   body {
-    @apply bg-dark text-foreground font-sans;
+    @apply bg-dark text-white font-sans;
   }
 }
 
