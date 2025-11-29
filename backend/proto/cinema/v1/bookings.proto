@@ -1,0 +1,120 @@
+syntax = "proto3";
+
+package cinema.v1;
+
+option go_package = "github.com/cinemaos/backend/gen/cinema/v1;cinemav1";
+
+import "cinema/v1/showtimes.proto";
+
+// Bookings Service
+service BookingsService {
+  rpc HoldSeats(HoldSeatsRequest) returns (HoldSeatsResponse);
+  rpc ConfirmBooking(ConfirmBookingRequest) returns (ConfirmBookingResponse);
+  rpc GetBooking(GetBookingRequest) returns (GetBookingResponse);
+  rpc ListUserBookings(ListUserBookingsRequest) returns (ListUserBookingsResponse);
+  rpc CancelBooking(CancelBookingRequest) returns (CancelBookingResponse);
+}
+
+message HoldSeatsRequest {
+  string showtime_id = 1;
+  repeated string seat_ids = 2;
+}
+
+message HoldSeatsResponse {
+  bool success = 1;
+  string hold_id = 2;
+  string expires_at = 3;
+  repeated Seat seats = 4;
+  PriceBreakdown pricing = 5;
+}
+
+message ConfirmBookingRequest {
+  string hold_id = 1;
+  optional string promo_code = 2;
+  string payment_method = 3;
+}
+
+message ConfirmBookingResponse {
+  bool success = 1;
+  string booking_id = 2;
+  string booking_reference = 3;
+  string status = 4;
+  double final_amount = 5;
+  string payment_url = 6;
+}
+
+message GetBookingRequest {
+  string id = 1;
+}
+
+message GetBookingResponse {
+  Booking booking = 1;
+}
+
+message ListUserBookingsRequest {
+  int32 page = 1;
+  int32 limit = 2;
+}
+
+message ListUserBookingsResponse {
+  repeated Booking bookings = 1;
+  Pagination pagination = 2;
+}
+
+message CancelBookingRequest {
+  string id = 1;
+  string reason = 2;
+}
+
+message CancelBookingResponse {
+  bool success = 1;
+  string message = 2;
+  double refund_amount = 3;
+}
+
+message Booking {
+  string id = 1;
+  string booking_reference = 2;
+  string user_id = 3;
+  string showtime_id = 4;
+  int32 num_tickets = 5;
+  double total_amount = 6;
+  double discount_amount = 7;
+  double final_amount = 8;
+  optional string promo_code = 9;
+  string booking_status = 10;
+  string payment_status = 11;
+  string booked_at = 12;
+  Showtime showtime = 13;
+  repeated BookedSeat seats = 14;
+}
+
+message BookedSeat {
+  string row = 1;
+  int32 seat_number = 2;
+  string type = 3;
+  double price = 4;
+}
+
+message PriceBreakdown {
+  repeated SeatPrice seat_prices = 1;
+  double subtotal = 2;
+  repeated Discount discounts = 3;
+  double total_discount = 4;
+  double tax = 5;
+  double final_amount = 6;
+}
+
+message SeatPrice {
+  string seat_id = 1;
+  double base_price = 2;
+  double final_price = 3;
+  repeated string breakdown = 4;
+}
+
+message Discount {
+  string type = 1;
+  string code = 2;
+  string description = 3;
+  double amount = 4;
+}
