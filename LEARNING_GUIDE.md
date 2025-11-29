@@ -20,7 +20,475 @@ By studying this codebase, you'll learn:
 
 ---
 
+## 🎓 Prerequisites - What You Need to Know
+
+Before diving into this codebase, you should understand:
+- ✅ Basic Go syntax (variables, functions, structs)
+- ✅ Go packages and imports
+- ❓ **Web development in Go** ← We'll teach you this!
+- ❓ **Databases in Go** ← We'll teach you this!
+- ❓ **HTTP servers** ← We'll teach you this!
+
+If you only know Go basics, **start with Level 0 below**!
+
+---
+
 ## 📖 Learning Path (Start Here!)
+
+### Level 0: Go Web Development Fundamentals (1-2 hours)
+**Goal**: Understand how web applications work in Go
+
+> ⚡ **START HERE if you've never built a web app in Go!**
+
+#### 🌐 Concept 1: How HTTP Works in Go
+
+**The Basics:**
+```go
+// Every web application needs:
+// 1. A server (listens for requests)
+// 2. Handlers (respond to requests)
+// 3. A router (maps URLs to handlers)
+
+package main
+
+import (
+    "fmt"
+    "net/http"
+)
+
+func main() {
+    // This is a handler - a function that responds to HTTP requests
+    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        fmt.Fprintf(w, "Hello, World!")
+    })
+    
+    // Start the server on port 8080
+    http.ListenAndServe(":8080", nil)
+}
+```
+
+**What's happening:**
+1. `http.HandleFunc("/", handler)` → "When someone visits `/`, run this function"
+2. `w http.ResponseWriter` → What you send back to the browser
+3. `r *http.Request` → What the browser sent to you
+4. `http.ListenAndServe(":8080", nil)` → Start listening on port 8080
+
+**Try it yourself:**
+1. Save this as `simple-server.go`
+2. Run: `go run simple-server.go`
+3. Open browser to: http://localhost:8080
+4. You'll see "Hello, World!"
+
+---
+
+#### 📦 Concept 2: Go Packages & Project Structure
+
+**In Go, code is organized in packages:**
+
+```go
+// File: main.go
+package main  // ← Package name
+
+import (
+    "fmt"                    // ← Standard library
+    "net/http"               // ← Standard library
+    "github.com/user/repo"   // ← External package
+    "myproject/internal/db"  // ← Your own package
+)
+```
+
+**Our project structure:**
+```
+backend/
+├── cmd/server/main.go       ← package main (entry point)
+├── internal/
+│   ├── models/user.go       ← package models
+│   ├── database/db.go       ← package database
+│   └── services/auth.go     ← package services
+└── go.mod                   ← Dependency management
+```
+
+**Key Rules:**
+- `package main` → Can be run (`go run`)
+- `package xyz` → Cannot be run directly, must be imported
+- `internal/` → Private packages (can't be imported from outside)
+
+---
+
+#### 🗄️ Concept 3: What is a Database in Go?
+
+**Without a library (raw SQL):**
+```go
+// Hard way - writing SQL manually
+db.Query("SELECT * FROM users WHERE email = ?", email)
+```
+
+**With GORM (ORM - Object Relational Mapping):**
+```go
+// Easy way - using Go structs
+type User struct {
+    ID    uint
+    Email string
+    Name  string
+}
+
+// Query becomes:
+db.Where("email = ?", email).First(&user)
+```
+
+**Why use GORM?**
+- ✅ Write Go code, not SQL
+- ✅ Type-safe (compiler catches errors)
+- ✅ Auto-creates tables
+- ✅ Handles relationships automatically
+
+**What you'll see in this project:**
+```go
+// This Go struct:
+type User struct {
+    ID    uuid.UUID `gorm:"type:uuid;primaryKey"`
+    Email string    `gorm:"uniqueIndex"`
+}
+
+// Becomes this SQL table:
+CREATE TABLE users (
+    id UUID PRIMARY KEY,
+    email VARCHAR UNIQUE
+);
+```
+
+---
+
+#### 🔗 Concept 4: HTTP Methods (GET, POST, PUT, DELETE)
+
+**In web apps, different actions use different methods:**
+
+```go
+func handler(w http.ResponseWriter, r *http.Request) {
+    // Check what method was used
+    switch r.Method {
+    case "GET":
+        // Read data (e.g., show a list of movies)
+        fmt.Fprintf(w, "Getting data...")
+        
+    case "POST":
+        // Create new data (e.g., register a user)
+        fmt.Fprintf(w, "Creating data...")
+        
+    case "PUT":
+        // Update existing data (e.g., update profile)
+        fmt.Fprintf(w, "Updating data...")
+        
+    case "DELETE":
+        // Delete data (e.g., cancel booking)
+        fmt.Fprintf(w, "Deleting data...")
+    }
+}
+```
+
+**Common pattern:**
+- `GET /movies` → List all movies
+- `GET /movies/123` → Get movie with ID 123
+- `POST /movies` → Create a new movie
+- `PUT /movies/123` → Update movie 123
+- `DELETE /movies/123` → Delete movie 123
+
+---
+
+#### 📝 Concept 5: JSON in Go
+
+**Web APIs use JSON to send data:**
+
+```go
+// Define a struct
+type Movie struct {
+    ID    string `json:"id"`      // ← JSON tag
+    Title string `json:"title"`
+    Year  int    `json:"year"`
+}
+
+// Convert struct to JSON (encoding)
+movie := Movie{ID: "1", Title: "Inception", Year: 2010}
+jsonData, _ := json.Marshal(movie)
+// Result: {"id":"1","title":"Inception","year":2010}
+
+// Convert JSON to struct (decoding)
+var movie Movie
+json.Unmarshal(jsonData, &movie)
+```
+
+**In a web handler:**
+```go
+func getMovie(w http.ResponseWriter, r *http.Request) {
+    movie := Movie{ID: "1", Title: "Inception", Year: 2010}
+    
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(movie)
+    // Browser receives: {"id":"1","title":"Inception","year":2010}
+}
+```
+
+---
+
+#### 🔐 Concept 6: Environment Variables
+
+**Never hardcode secrets in code!**
+
+```go
+// ❌ BAD - Don't do this!
+password := "my-secret-password"
+
+// ✅ GOOD - Use environment variables
+password := os.Getenv("DB_PASSWORD")
+```
+
+**In this project, we use `.env` file:**
+```bash
+# .env file
+DB_PASSWORD=super-secret
+JWT_SECRET=another-secret
+```
+
+**Then load it in Go:**
+```go
+import "github.com/joho/godotenv"
+
+godotenv.Load()  // Reads .env file
+password := os.Getenv("DB_PASSWORD")
+```
+
+---
+
+#### 🧩 Concept 7: Struct Tags (The `backtick` things)
+
+**You'll see this a lot:**
+```go
+type User struct {
+    ID    uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+    Email string    `gorm:"uniqueIndex" json:"email"`
+}
+```
+
+**What are those backticks?**
+- They're called "struct tags"
+- They're metadata that other packages read
+- Different packages use different tags
+
+**Common tags:**
+- `json:"id"` → When converting to JSON, call this field "id"
+- `gorm:"type:uuid"` → GORM: use UUID type in database
+- `gorm:"uniqueIndex"` → GORM: make this unique in database
+
+**Example:**
+```go
+type User struct {
+    ID    int    `json:"user_id" gorm:"primaryKey"`
+    Email string `json:"email" gorm:"uniqueIndex"`
+}
+
+// In JSON:    {"user_id": 1, "email": "..."}
+// In Database: id (PRIMARY KEY), email (UNIQUE)
+```
+
+---
+
+#### 🎯 Concept 8: Pointers in Web Development
+
+**You'll see `*` and `&` a lot:**
+
+```go
+// Without pointer
+func UpdateUser(user User) {
+    user.Email = "new@email.com"  // Changes local copy only
+}
+
+// With pointer
+func UpdateUser(user *User) {
+    user.Email = "new@email.com"  // Changes the actual user
+}
+
+// Usage:
+user := User{Email: "old@email.com"}
+UpdateUser(&user)  // ← Pass address with &
+fmt.Println(user.Email)  // "new@email.com"
+```
+
+**Common patterns:**
+- `*User` → "Pointer to a User"
+- `&user` → "Give me the address of user"
+- Database queries often use pointers:
+  ```go
+  var user User
+  db.First(&user)  // ← Need pointer to fill the struct
+  ```
+
+---
+
+#### ⚡ Concept 9: Error Handling in Go
+
+**Go doesn't have try/catch. Instead:**
+
+```go
+// Most functions return (result, error)
+result, err := doSomething()
+
+if err != nil {
+    // Handle the error
+    log.Fatal(err)
+    return
+}
+
+// Use result (only if err was nil)
+fmt.Println(result)
+```
+
+**Common pattern in this codebase:**
+```go
+func GetUser(id string) (*User, error) {
+    var user User
+    
+    err := db.First(&user, id).Error
+    if err != nil {
+        return nil, err  // Return nil user and the error
+    }
+    
+    return &user, nil  // Return user and nil error
+}
+
+// Usage:
+user, err := GetUser("123")
+if err != nil {
+    // Handle error
+}
+```
+
+---
+
+#### 🔄 Concept 10: Middleware Pattern
+
+**Middleware = Code that runs BEFORE your handler**
+
+```go
+// Without middleware
+func handler(w http.ResponseWriter, r *http.Request) {
+    // Check authentication
+    token := r.Header.Get("Authorization")
+    if token == "" {
+        http.Error(w, "Unauthorized", 401)
+        return
+    }
+    
+    // Actual logic
+    fmt.Fprintf(w, "Hello!")
+}
+
+// With middleware (cleaner!)
+func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        // Check authentication
+        token := r.Header.Get("Authorization")
+        if token == "" {
+            http.Error(w, "Unauthorized", 401)
+            return
+        }
+        
+        // Call next handler
+        next(w, r)
+    }
+}
+
+// Usage:
+http.HandleFunc("/protected", authMiddleware(handler))
+```
+
+**In this project:**
+- `middleware/auth.go` → Checks JWT tokens
+- Applied to routes that need authentication
+
+---
+
+#### 📚 Concept 11: Go Modules (go.mod)
+
+**`go.mod` is like `package.json` for Node.js:**
+
+```go
+module myproject
+
+go 1.21
+
+require (
+    github.com/lib/pq v1.10.9        // PostgreSQL driver
+    gorm.io/gorm v1.25.5             // ORM
+)
+```
+
+**Commands:**
+- `go mod init myproject` → Create new module
+- `go mod tidy` → Add missing, remove unused dependencies
+- `go get package@version` → Add specific package
+
+---
+
+#### 🎓 Quick Exercise: Build a Simple API
+
+**Try this before reading the codebase:**
+
+```go
+package main
+
+import (
+    "encoding/json"
+    "net/http"
+)
+
+type Movie struct {
+    Title string `json:"title"`
+    Year  int    `json:"year"`
+}
+
+func main() {
+    // GET /movies - return list
+    http.HandleFunc("/movies", func(w http.ResponseWriter, r *http.Request) {
+        movies := []Movie{
+            {Title: "Inception", Year: 2010},
+            {Title: "Interstellar", Year: 2014},
+        }
+        
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(movies)
+    })
+    
+    http.ListenAndServe(":8080", nil)
+}
+```
+
+**Test it:**
+1. Save as `movies.go`
+2. Run: `go run movies.go`
+3. Open: http://localhost:8080/movies
+4. You should see JSON!
+
+---
+
+### ✅ Level 0 Checklist
+
+Before moving to Level 1, make sure you understand:
+
+- [ ] How to create a basic HTTP server
+- [ ] What handlers do (w ResponseWriter, r Request)
+- [ ] How packages work in Go
+- [ ] What GORM does (ORM = struct ↔ database)
+- [ ] HTTP methods (GET, POST, PUT, DELETE)
+- [ ] JSON encoding/decoding
+- [ ] Environment variables
+- [ ] Struct tags (those backtick things)
+- [ ] Pointers (`*` and `&`)
+- [ ] Error handling (if err != nil)
+- [ ] Middleware concept
+
+**Once you understand these, you're ready for Level 1!**
+
+---
 
 ### Level 1: Project Structure (30 mins)
 **Goal**: Understand how the code is organized
