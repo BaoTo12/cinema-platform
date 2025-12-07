@@ -51,6 +51,9 @@ type ShowtimeRepository interface {
 	
 	// UpdateStatus updates the showtime status
 	UpdateStatus(ctx context.Context, id uuid.UUID, status entity.ShowtimeStatus) error
+
+	// GetByMovieID returns showtimes for a specific movie
+	GetByMovieID(ctx context.Context, movieID uuid.UUID) ([]*entity.Showtime, error)
 }
 
 // BookingFilter defines filters for booking queries

@@ -60,6 +60,7 @@ func (r *Router) Setup() *gin.Engine {
 	router.Use(middleware.RecoveryMiddleware(r.logger))
 	router.Use(middleware.RequestIDMiddleware())
 	router.Use(middleware.LoggingMiddleware(r.logger))
+	router.Use(middleware.ResponseTimeMiddleware(r.logger))
 	router.Use(middleware.CORSMiddleware(r.cfg.CORS))
 	router.Use(middleware.SecureHeadersMiddleware())
 
@@ -100,6 +101,7 @@ func (r *Router) Setup() *gin.Engine {
 			movies.GET("/:id", r.movieHandler.GetByID)
 			movies.GET("/now-showing", r.movieHandler.GetNowShowing)
 			movies.GET("/coming-soon", r.movieHandler.GetComingSoon)
+			movies.GET("/:id/showtimes", r.movieHandler.GetShowtimes)
 			
 			// Admin only
 			movies.POST("", r.authMiddleware.Authenticate(), r.authMiddleware.RequireAdmin(), r.movieHandler.Create)

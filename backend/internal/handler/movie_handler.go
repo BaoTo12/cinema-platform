@@ -4,6 +4,7 @@ import (
 
 
 	movieapp "cinemaos-backend/internal/app/movie"
+	showtimeapp "cinemaos-backend/internal/app/showtime"
 	"cinemaos-backend/internal/pkg/response"
 	"cinemaos-backend/internal/pkg/validator"
 
@@ -13,15 +14,17 @@ import (
 
 // MovieHandler handles movie HTTP requests
 type MovieHandler struct {
-	movieService *movieapp.Service
-	validator    *validator.Validator
+	movieService    *movieapp.Service
+	showtimeService *showtimeapp.Service
+	validator       *validator.Validator
 }
 
 // NewMovieHandler creates a new movie handler
-func NewMovieHandler(movieService *movieapp.Service, validator *validator.Validator) *MovieHandler {
+func NewMovieHandler(movieService *movieapp.Service, showtimeService *showtimeapp.Service, validator *validator.Validator) *MovieHandler {
 	return &MovieHandler{
-		movieService: movieService,
-		validator:    validator,
+		movieService:    movieService,
+		showtimeService: showtimeService,
+		validator:       validator,
 	}
 }
 
@@ -217,4 +220,30 @@ func (h *MovieHandler) GetComingSoon(c *gin.Context) {
 	}
 
 	response.Paginated(c, result, pagination, total)
+}
+
+// GetShowtimes godoc
+// @Summary Get movie showtimes
+// @Description Get all upcoming showtimes for a specific movie
+// @Tags movies
+// @Produce json
+// @Param id path string true "Movie ID"
+// @Success 200 {object} response.Response{data=[]showtimeapp.ShowtimeResponse}
+// @Failure 400 {object} response.Response
+// @Failure 404 {object} response.Response
+// @Router /movies/{id}/showtimes [get]
+func (h *MovieHandler) GetShowtimes(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.BadRequest(c, "Invalid movie ID")
+		return
+	}
+
+	result, err := h.showtimeService.GetShowtimesByMovieID(c.Request.Context(), id)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, result)
 }

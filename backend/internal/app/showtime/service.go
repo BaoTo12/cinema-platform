@@ -188,6 +188,21 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateShowtimeRe
 	return s.toShowtimeResponse(showtime), nil
 }
 
+// GetShowtimesByMovieID returns all showtimes for a movie
+func (s *Service) GetShowtimesByMovieID(ctx context.Context, movieID uuid.UUID) ([]*ShowtimeResponse, error) {
+	showtimes, err := s.showtimeRepo.GetByMovieID(ctx, movieID)
+	if err != nil {
+		return nil, err
+	}
+
+	var responses []*ShowtimeResponse
+	for _, st := range showtimes {
+		responses = append(responses, s.toShowtimeResponse(st))
+	}
+
+	return responses, nil
+}
+
 // Delete deletes a showtime
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	return s.showtimeRepo.Delete(ctx, id)

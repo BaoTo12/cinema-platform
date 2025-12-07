@@ -161,7 +161,7 @@ func main() {
 	// Handlers
 	authHandler := handler.NewAuthHandler(authService, requestValidator)
 	healthHandler := handler.NewHealthHandler(cfg, db, redisClient)
-	movieHandler := handler.NewMovieHandler(movieService, requestValidator)
+	movieHandler := handler.NewMovieHandler(movieService, showtimeService, requestValidator)
 	cinemaHandler := handler.NewCinemaHandler(cinemaService, requestValidator)
 	showtimeHandler := handler.NewShowtimeHandler(showtimeService, requestValidator)
 

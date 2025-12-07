@@ -147,3 +147,18 @@ func (r *ShowtimeRepository) UpdateStatus(ctx context.Context, id uuid.UUID, sta
 		Where("id = ?", id).
 		Update("status", status).Error
 }
+
+// GetByMovieID returns showtimes for a specific movie
+func (r *ShowtimeRepository) GetByMovieID(ctx context.Context, movieID uuid.UUID) ([]*entity.Showtime, error) {
+	var showtimes []*entity.Showtime
+	if err := r.db.WithContext(ctx).
+		Preload("Movie").
+		Preload("Cinema").
+		Preload("Screen").
+		Where("movie_id = ? AND show_date >= ?", movieID, time.Now().Truncate(24*time.Hour)).
+		Order("show_date ASC, start_time ASC").
+		Find(&showtimes).Error; err != nil {
+		return nil, err
+	}
+	return showtimes, nil
+}
