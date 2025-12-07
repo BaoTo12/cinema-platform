@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/cinemaos/backend/internal/database"
-	"github.com/cinemaos/backend/internal/models"
-	cinemav1 "github.com/cinemaos/backend/proto/cinema/v1"
+	"cinemaos-backend/internal/database"
+	"cinemaos-backend/internal/models"
+	cinemav1 "cinemaos-backend/proto/cinema/v1"
 	"github.com/google/uuid"
 )
 
@@ -51,7 +51,7 @@ func (s *PricingService) CalculatePrice(
 		}
 
 		// Time-based modifier
-		if isTime := getTimeModifier(showtime.StartTime); isPeakTime(showtime.StartTime) {
+		if isPeakTime(showtime.StartTime) {
 			price += 2.0
 			breakdown = append(breakdown, "Peak time: +$2.00")
 		}

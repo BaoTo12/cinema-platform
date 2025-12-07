@@ -2,16 +2,15 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/cinemaos/backend/internal/cache"
-	"github.com/cinemaos/backend/internal/database"
-	"github.com/cinemaos/backend/internal/middleware"
-	"github.com/cinemaos/backend/internal/models"
-	cinemav1 "github.com/cinemaos/backend/proto/cinema/v1"
+	"cinemaos-backend/internal/cache"
+	"cinemaos-backend/internal/database"
+	"cinemaos-backend/internal/middleware"
+	"cinemaos-backend/internal/models"
+	cinemav1 "cinemaos-backend/proto/cinema/v1"
 	"github.com/google/uuid"
 )
 

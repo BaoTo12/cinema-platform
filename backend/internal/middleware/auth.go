@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"connectrpc.com/connect"
-	"github.com/cinemaos/backend/internal/utils"
+	"cinemaos-backend/internal/utils"
 )
 
 const UserContextKey = "user"

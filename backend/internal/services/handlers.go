@@ -5,10 +5,7 @@ package services
 // For now, we're creating manual stubs to make the server compile
 
 import (
-	"context"
-
 	"connectrpc.com/connect"
-	cinemav1 "github.com/cinemaos/backend/proto/cinema/v1"
 )
 
 // Handler registration functions (stubs for compilation)

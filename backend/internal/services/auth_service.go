@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/cinemaos/backend/internal/database"
-	"github.com/cinemaos/backend/internal/middleware"
-	"github.com/cinemaos/backend/internal/models"
-	"github.com/cinemaos/backend/internal/utils"
-	cinemav1 "github.com/cinemaos/backend/proto/cinema/v1"
+	"cinemaos-backend/internal/database"
+	"cinemaos-backend/internal/middleware"
+	"cinemaos-backend/internal/models"
+	"cinemaos-backend/internal/utils"
+	cinemav1 "cinemaos-backend/proto/cinema/v1"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )

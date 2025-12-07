@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/cinemaos/backend/internal/models"
+	"cinemaos-backend/internal/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
