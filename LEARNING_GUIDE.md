@@ -1,452 +1,525 @@
 # 🎓 CinemaOS Backend - Complete Learning Guide
 
-> **For Go Web Development Beginners**  
-> This guide explains the project's architecture and code in detail to help you learn modern backend development with Go.
+> **A comprehensive guide for Go web development beginners**  
+> Learn modern backend development by exploring a real production-grade cinema booking system.
 
 ---
 
-## 📚 Table of Contents
+## 📋 Table of Contents
 
-1. [Project Overview](#-project-overview)
-2. [How to Run the Project](#-how-to-run-the-project)
-3. [Understanding the Architecture](#-understanding-the-architecture)
-4. [Layer-by-Layer Deep Dive](#-layer-by-layer-deep-dive)
-5. [Request Flow: How a Request Travels](#-request-flow-how-a-request-travels)
-6. [Key Libraries Used](#-key-libraries-used)
-7. [Studying the Code (Recommended Order)](#-studying-the-code-recommended-order)
-8. [Common Patterns Explained](#-common-patterns-explained)
-9. [Exercises for Practice](#-exercises-for-practice)
-
----
-
-## 🌟 Project Overview
-
-**CinemaOS** is a cinema booking platform backend built with Go. It demonstrates:
-
-- **Clean/Hexagonal Architecture**: Separating business logic from infrastructure
-- **RESTful API Design**: Using Gin framework
-- **Database Access**: PostgreSQL with GORM ORM
-- **Authentication**: JWT-based auth with refresh tokens
-- **Caching**: Redis for session management
-- **Observability**: Structured logging (Zap) + distributed tracing (OpenTelemetry)
-
-### What You'll Learn
-
-| Concept | Files to Study |
-|---------|---------------|
-| Go project structure | `cmd/api/main.go`, `internal/` folder |
-| Database modeling | `internal/domain/entity/*.go` |
-| Repository pattern | `internal/domain/repository/*.go` |
-| Service/Use Case layer | `internal/application/*/service.go` |
-| HTTP handlers | `internal/interfaces/http/handler/*.go` |
-| Middleware | `internal/interfaces/http/middleware/*.go` |
-| Dependency Injection | `cmd/api/main.go` |
+1. [What You'll Learn](#-what-youll-learn)
+2. [Project Structure (golang-standards)](#-project-structure)
+3. [Understanding Each Directory](#-understanding-each-directory)
+4. [How the Code Works](#-how-the-code-works)
+5. [Request Lifecycle](#-request-lifecycle)
+6. [Key Concepts Explained](#-key-concepts-explained)
+7. [Code Walkthrough](#-code-walkthrough)
+8. [How to Run](#-how-to-run)
+9. [Exercises](#-exercises)
 
 ---
 
-## 🚀 How to Run the Project
+## 🎯 What You'll Learn
 
-### Prerequisites
+By studying this codebase, you'll master:
 
-- **Go 1.21+** installed
-- **Docker** (for PostgreSQL and Redis)
-
-### Steps
-
-1. **Clone and navigate:**
-   ```bash
-   cd backend
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   go mod download
-   ```
-
-3. **Start infrastructure (Docker):**
-   ```bash
-   docker-compose up -d
-   ```
-   This starts PostgreSQL, Redis, and Jaeger (tracing).
-
-4. **Configure environment:**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your database credentials if needed
-   ```
-
-5. **Run the application:**
-   ```bash
-   go run ./cmd/api
-   ```
-
-6. **Test the API:**
-   ```bash
-   curl http://localhost:8080/health
-   ```
+| Skill | Where to Find It |
+|-------|------------------|
+| Go project structure | Root folder organization |
+| HTTP routing with Gin | `internal/router/` |
+| Middleware patterns | `internal/middleware/` |
+| Database with GORM | `internal/app/postgres/` |
+| JWT Authentication | `internal/app/authinfra/` |
+| Clean Architecture | `internal/app/` organization |
+| Configuration management | `internal/config/` |
+| Dependency injection | `cmd/api/main.go` |
 
 ---
 
-## 🏗️ Understanding the Architecture
+## 📁 Project Structure
 
-This project uses **Clean Architecture** (also called Hexagonal Architecture). The key principle is:
-
-> **Dependencies point INWARD** - outer layers depend on inner layers, never the reverse.
-
-```
-┌────────────────────────────────────────────────────────────────┐
-│                      INTERFACES LAYER                          │
-│   (HTTP handlers, middleware, gRPC, CLI - how external         │
-│    systems communicate with our app)                           │
-├────────────────────────────────────────────────────────────────┤
-│                      APPLICATION LAYER                          │
-│   (Services/Use Cases - business logic orchestration)          │
-├────────────────────────────────────────────────────────────────┤
-│                       DOMAIN LAYER                              │
-│   (Entities + Repository Interfaces - the core business models)│
-├────────────────────────────────────────────────────────────────┤
-│                    INFRASTRUCTURE LAYER                         │
-│   (Database, cache, external APIs - technical implementations) │
-└────────────────────────────────────────────────────────────────┘
-```
-
-### Project Structure Mapped to Architecture
+This project follows the [golang-standards/project-layout](https://github.com/golang-standards/project-layout):
 
 ```
 backend/
-├── cmd/api/main.go                 ← Entry point & Dependency Injection
+├── cmd/                    # Application entry points
+│   └── api/
+│       └── main.go        # 👈 START HERE - wires everything together
 │
-├── internal/
-│   ├── domain/                     ← DOMAIN LAYER (innermost)
-│   │   ├── entity/                 ← Business entities (User, Movie, etc.)
-│   │   └── repository/             ← Repository interfaces (contracts)
+├── internal/               # Private application code
+│   ├── app/               # Business logic (services, entities, repos)
+│   │   ├── entity/        # Domain models (User, Movie, Booking)
+│   │   ├── repository/    # Repository interfaces
+│   │   ├── auth/          # Auth service + DTOs
+│   │   ├── authinfra/     # JWT & password utilities
+│   │   ├── movie/         # Movie service
+│   │   ├── cinema/        # Cinema service
+│   │   ├── showtime/      # Showtime service
+│   │   ├── postgres/      # Database implementations
+│   │   └── redis/         # Cache client
 │   │
-│   ├── application/                ← APPLICATION LAYER
-│   │   ├── auth/                   ← Auth service + DTOs
-│   │   ├── movie/                  ← Movie service + DTOs
-│   │   ├── cinema/                 ← Cinema service + DTOs
-│   │   └── showtime/               ← Showtime service + DTOs
-│   │
-│   ├── infrastructure/             ← INFRASTRUCTURE LAYER
-│   │   ├── persistence/postgres/   ← PostgreSQL repository implementations
-│   │   ├── persistence/redis/      ← Redis client
-│   │   └── auth/                   ← JWT & password utilities
-│   │
-│   ├── interfaces/                 ← INTERFACES LAYER (outermost)
-│   │   └── http/                   ← HTTP-specific code
-│   │       ├── handler/            ← HTTP request handlers
-│   │       ├── middleware/         ← Auth, CORS, logging middleware
-│   │       ├── router/             ← Route definitions
-│   │       └── server.go           ← HTTP server configuration
-│   │
-│   └── pkg/                        ← Shared utilities (logger, validator, etc.)
+│   ├── config/            # Configuration loader (Go code)
+│   ├── handler/           # HTTP request handlers
+│   ├── middleware/        # Auth, CORS, logging middleware
+│   ├── router/            # Route definitions
+│   ├── server/            # HTTP server setup
+│   └── pkg/               # Shared utilities
+│       ├── logger/        # Structured logging (Zap)
+│       ├── validator/     # Input validation
+│       ├── response/      # Standardized API responses
+│       ├── errors/        # Custom error types
+│       └── tracer/        # Distributed tracing
 │
-└── config/                         ← Configuration loading
+├── api/                    # API definitions
+│   └── proto/             # Protocol Buffer files (gRPC)
+│
+├── configs/                # Configuration FILES (yaml, json)
+│   └── config.yaml        # Default configuration
+│
+├── build/                  # Build & packaging
+│   └── package/
+│       └── Dockerfile     # Container image
+│
+├── deployments/            # Deployment configs
+│   └── docker-compose.yml # Local development stack
+│
+├── scripts/                # Build/deploy scripts
+├── test/                   # Integration tests
+├── go.mod                  # Go module definition
+└── Makefile               # Common commands
 ```
 
 ---
 
-## 🔍 Layer-by-Layer Deep Dive
+## 📂 Understanding Each Directory
 
-### 1. Domain Layer (`internal/domain/`)
+### `/cmd` - Entry Points
 
-This is the **core** of your application. It contains:
+**What is it?** The `cmd` directory contains your application's `main.go` files.
 
-- **Entities**: Pure Go structs representing business objects
-- **Repository Interfaces**: Contracts that define what data operations are needed
+**Rule:** Each subdirectory becomes a separate executable. The directory name becomes the binary name.
 
-#### 📁 `internal/domain/entity/user.go`
+```
+cmd/
+└── api/
+    └── main.go    → builds to `api.exe` or `api`
+```
+
+**What `main.go` does:**
+1. Loads configuration
+2. Creates database connections
+3. Creates all repositories, services, and handlers
+4. Wires everything together (Dependency Injection)
+5. Starts the HTTP server
+
+---
+
+### `/internal` - Private Code
+
+**What is it?** Code that ONLY this project can import. Go enforces this!
+
+**Why?** Prevents external packages from depending on your internal implementation.
 
 ```go
-// User is a DOMAIN ENTITY - it represents a business concept
-type User struct {
-    ID           uuid.UUID `gorm:"type:uuid;primary_key;..."`
-    Email        string    `gorm:"uniqueIndex;not null"`
-    PasswordHash string    `gorm:"not null" json:"-"`  // json:"-" hides it from API responses
-    FirstName    *string   // Pointer = optional field (can be NULL in database)
-    Role         UserRole  `gorm:"type:varchar(20);default:'CUSTOMER'"`
-    IsActive     bool      `gorm:"default:true"`
-    CreatedAt    time.Time
-    UpdatedAt    time.Time
-    DeletedAt    gorm.DeletedAt `gorm:"index"` // Soft delete support
+// ❌ This import would FAIL from another project:
+import "cinemaos-backend/internal/app/auth"
+
+// ✅ This would work (if we put it in /pkg):
+import "cinemaos-backend/pkg/utils"
+```
+
+---
+
+### `/internal/app` - Business Logic
+
+This is where your **domain logic** lives, organized by feature:
+
+```
+app/
+├── entity/        # Data structures (what things ARE)
+├── repository/    # Interfaces (what operations exist)
+├── auth/          # Auth feature (service + DTOs)
+├── movie/         # Movie feature
+├── cinema/        # Cinema feature
+├── showtime/      # Showtime feature
+├── postgres/      # HOW we store data (implementation)
+└── redis/         # HOW we cache data
+```
+
+**Key principle:** Services depend on INTERFACES, not implementations:
+
+```go
+// ✅ GOOD - depends on interface
+type MovieService struct {
+    repo repository.MovieRepository  // Interface!
+}
+
+// ❌ BAD - depends on concrete type
+type MovieService struct {
+    repo *postgres.MovieRepositoryImpl  // Ties you to PostgreSQL!
 }
 ```
 
-**Key Learnings:**
-- `gorm:` tags tell GORM how to map fields to database columns
-- `json:` tags control JSON serialization (what the API returns)
-- Pointer types (`*string`) represent optional/nullable fields
-- `gorm.DeletedAt` enables soft deletes (data isn't actually deleted)
+---
 
-#### 📁 `internal/domain/repository/user_repository.go`
+### `/configs` - Configuration Files
+
+**What is it?** Template configuration files (YAML, JSON, TOML).
+
+**vs `/internal/config`:** 
+- `/configs/config.yaml` = The actual config FILE
+- `/internal/config/config.go` = Go CODE that loads and parses it
+
+```yaml
+# configs/config.yaml
+app:
+  name: CinemaOS
+  environment: development
+
+server:
+  port: 8080
+
+database:
+  host: localhost
+  port: 5432
+```
 
 ```go
-// UserRepository is an INTERFACE - a contract
-// It defines WHAT operations are needed, not HOW they're implemented
+// internal/config/config.go
+type Config struct {
+    App    AppConfig    `mapstructure:"app"`
+    Server ServerConfig `mapstructure:"server"`
+}
+```
+
+---
+
+## 🔧 How the Code Works
+
+### 1. Configuration (`internal/config/config.go`)
+
+Configuration is loaded using **Viper**, a popular Go config library:
+
+```go
+// What this does:
+// 1. Sets default values
+// 2. Reads config.yaml file
+// 3. Overrides with environment variables
+// 4. Returns a typed Config struct
+
+func Load(configPath string) (*Config, error) {
+    v := viper.New()
+    
+    // Set defaults
+    v.SetDefault("server.port", 8080)
+    
+    // Read file
+    v.SetConfigFile(configPath)
+    v.ReadInConfig()
+    
+    // Environment variables override file
+    v.SetEnvPrefix("CINEMAOS")
+    v.AutomaticEnv()
+    
+    // Parse into struct
+    var cfg Config
+    v.Unmarshal(&cfg)
+    return &cfg, nil
+}
+```
+
+**Key learning:** Environment variables win over config files (important for Docker/Kubernetes).
+
+---
+
+### 2. Entities (`internal/app/entity/`)
+
+Entities are your **data models** - Go structs that map to database tables:
+
+```go
+// internal/app/entity/user.go
+type User struct {
+    ID           uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+    Email        string         `gorm:"uniqueIndex;not null"`
+    PasswordHash string         `gorm:"not null" json:"-"`  // json:"-" hides from API
+    FirstName    string         `gorm:"not null"`
+    LastName     string         `gorm:"not null"`
+    Role         UserRole       `gorm:"type:varchar(20);default:'CUSTOMER'"`
+    IsActive     bool           `gorm:"default:true"`
+    CreatedAt    time.Time
+    UpdatedAt    time.Time
+    DeletedAt    gorm.DeletedAt `gorm:"index"`  // Soft delete
+}
+
+// This method is called by your code
+func (u *User) FullName() string {
+    return u.FirstName + " " + u.LastName
+}
+```
+
+**Struct tags explained:**
+- `gorm:"..."` - Instructions for the database ORM
+- `json:"..."` - Instructions for JSON encoding
+- `validate:"..."` - Instructions for validation
+
+---
+
+### 3. Repository Interface (`internal/app/repository/`)
+
+Repositories define **WHAT** data operations exist (not HOW):
+
+```go
+// internal/app/repository/user_repository.go
 type UserRepository interface {
     Create(ctx context.Context, user *entity.User) error
     GetByID(ctx context.Context, id uuid.UUID) (*entity.User, error)
     GetByEmail(ctx context.Context, email string) (*entity.User, error)
     Update(ctx context.Context, user *entity.User) error
     Delete(ctx context.Context, id uuid.UUID) error
+    EmailExists(ctx context.Context, email string) (bool, error)
 }
 ```
 
 **Why interfaces?**
-- The Application layer works with interfaces, not implementations
-- You can swap implementations (e.g., PostgreSQL → MongoDB) without changing business logic
-- Makes testing easy (you can create mock implementations)
+1. **Testability:** Mock the interface in tests
+2. **Flexibility:** Swap PostgreSQL for MongoDB without changing services
+3. **Clean code:** Services don't know about SQL
 
 ---
 
-### 2. Infrastructure Layer (`internal/infrastructure/`)
+### 4. Repository Implementation (`internal/app/postgres/`)
 
-This layer **implements** the repository interfaces defined in Domain.
-
-#### 📁 `internal/infrastructure/persistence/postgres/user_repository.go`
+This is **HOW** we actually store data:
 
 ```go
-// userRepository IMPLEMENTS repository.UserRepository
+// internal/app/postgres/user_repository.go
 type userRepository struct {
-    db *Database  // Database connection wrapper
+    db *Database
 }
 
-// NewUserRepository creates a new user repository
-// Returns the INTERFACE type, not the struct
+// Constructor returns INTERFACE type, not struct
 func NewUserRepository(db *Database) repository.UserRepository {
     return &userRepository{db: db}
 }
 
-// GetByEmail implements repository.UserRepository.GetByEmail
+// GetByEmail implements the interface method
 func (r *userRepository) GetByEmail(ctx context.Context, email string) (*entity.User, error) {
     var user entity.User
     
-    // GORM query: SELECT * FROM users WHERE email = ?
+    // GORM query - translates to: SELECT * FROM users WHERE email = ?
     err := r.db.WithContext(ctx).
         Where("email = ?", email).
         First(&user).Error
     
     if err != nil {
         if errors.Is(err, gorm.ErrRecordNotFound) {
-            return nil, apperrors.New(apperrors.CodeNotFound, "user not found")
+            return nil, apperrors.ErrUserNotFound()
         }
-        return nil, apperrors.Wrap(err, apperrors.CodeInternal, "failed to get user")
+        return nil, err
     }
     
     return &user, nil
 }
 ```
 
-**Key Learnings:**
-- The function returns an interface (`repository.UserRepository`), but creates a concrete struct
-- `db.WithContext(ctx)` passes the request context for timeout/cancellation support
-- Custom error wrapping provides consistent error handling
-
 ---
 
-### 3. Application Layer (`internal/application/`)
+### 5. Service/Application Layer (`internal/app/auth/`)
 
-This layer contains **business logic**. Each module (auth, movie, cinema) has:
-- `service.go`: The main logic
-- `dto.go`: Data Transfer Objects (request/response structs)
-
-#### 📁 `internal/application/auth/service.go`
+Services contain **business logic** - the rules of your application:
 
 ```go
-// Service holds dependencies needed for auth operations
+// internal/app/auth/service.go
 type Service struct {
-    userRepo        repository.UserRepository      // Interface, not concrete type!
-    refreshTokenRepo repository.RefreshTokenRepository
-    jwtManager      *infraauth.JWTManager
-    passwordManager *infraauth.PasswordManager
-    logger          *logger.Logger
+    userRepo       repository.UserRepository      // Interfaces!
+    refreshRepo    repository.RefreshTokenRepository
+    jwtManager     *authinfra.JWTManager
+    passwordMgr    *authinfra.PasswordManager
+    logger         *logger.Logger
 }
 
-// NewService creates a new auth service with injected dependencies
-func NewService(
-    userRepo repository.UserRepository,
-    refreshTokenRepo repository.RefreshTokenRepository,
-    jwtManager *infraauth.JWTManager,
-    passwordManager *infraauth.PasswordManager,
-    logger *logger.Logger,
-    frontendURL string,
-) *Service {
-    return &Service{
-        userRepo:         userRepo,
-        refreshTokenRepo: refreshTokenRepo,
-        jwtManager:       jwtManager,
-        passwordManager:  passwordManager,
-        logger:           logger,
-    }
-}
-
-// Register creates a new user account
 func (s *Service) Register(ctx context.Context, req RegisterRequest) (*AuthResponse, error) {
-    // 1. Check if user already exists
-    existing, _ := s.userRepo.GetByEmail(ctx, req.Email)
-    if existing != nil {
-        return nil, apperrors.New(apperrors.CodeConflict, "email already registered")
+    // 1. Business rule: email must be unique
+    exists, _ := s.userRepo.EmailExists(ctx, req.Email)
+    if exists {
+        return nil, apperrors.ErrEmailExists()
     }
     
-    // 2. Hash the password (never store plain text!)
-    hashedPassword, err := s.passwordManager.HashPassword(req.Password)
+    // 2. Security: hash the password
+    hash, err := s.passwordMgr.HashPassword(req.Password)
     if err != nil {
         return nil, err
     }
     
-    // 3. Create the user entity
+    // 3. Create user entity
     user := &entity.User{
         Email:        req.Email,
-        PasswordHash: hashedPassword,
-        FirstName:    &req.FirstName,
-        LastName:     &req.LastName,
-        Role:         entity.UserRoleCustomer,
+        PasswordHash: hash,
+        FirstName:    req.FirstName,
+        LastName:     req.LastName,
     }
     
-    // 4. Save to database via repository
+    // 4. Persist to database
     if err := s.userRepo.Create(ctx, user); err != nil {
         return nil, err
     }
     
     // 5. Generate JWT tokens
-    accessToken, err := s.jwtManager.GenerateAccessToken(user)
-    refreshToken, err := s.jwtManager.GenerateRefreshToken(user)
+    accessToken, _ := s.jwtManager.GenerateAccessToken(user.ID, user.Email, string(user.Role))
     
-    // 6. Return response
     return &AuthResponse{
-        AccessToken:  accessToken,
-        RefreshToken: refreshToken,
-        User:         toUserResponse(user),
+        AccessToken: accessToken,
+        User:        toUserResponse(user),
     }, nil
 }
 ```
 
-**Key Learnings:**
-- Services depend on **interfaces**, not concrete implementations
-- Dependencies are **injected** through the constructor
-- Business rules are enforced here (e.g., "email must be unique")
-- The service doesn't know about HTTP, databases, or frameworks
+**Key patterns:**
+- Services depend on interfaces (injected via constructor)
+- Services validate business rules
+- Services orchestrate operations across repositories
 
-#### 📁 `internal/application/auth/dto.go`
+---
+
+### 6. DTOs (`internal/app/auth/dto.go`)
+
+DTOs (Data Transfer Objects) define API request/response shapes:
 
 ```go
-// DTOs (Data Transfer Objects) define the shape of API requests/responses
-
-// RegisterRequest is what the client sends
+// What the client SENDS
 type RegisterRequest struct {
     Email     string `json:"email" validate:"required,email"`
-    Password  string `json:"password" validate:"required,min=8,password"`
-    FirstName string `json:"first_name" validate:"required,min=2"`
-    LastName  string `json:"last_name" validate:"required,min=2"`
+    Password  string `json:"password" validate:"required,min=8"`
+    FirstName string `json:"first_name" validate:"required"`
+    LastName  string `json:"last_name" validate:"required"`
 }
 
-// AuthResponse is what we send back
+// What we RETURN
 type AuthResponse struct {
     AccessToken  string       `json:"access_token"`
     RefreshToken string       `json:"refresh_token"`
+    ExpiresIn    int64        `json:"expires_in"`
     User         UserResponse `json:"user"`
 }
 ```
 
 **Why DTOs?**
-- Separate internal entity structure from API contract
-- Add validation rules via struct tags (`validate:"..."`)
-- Control exactly what data is exposed to clients
+- Separate API contract from internal entities
+- Add validation rules
+- Control what data is exposed
 
 ---
 
-### 4. Interfaces Layer (`internal/interfaces/`)
+### 7. HTTP Handlers (`internal/handler/`)
 
-This layer handles **communication with the outside world** (HTTP in our case).
-
-#### 📁 `internal/interfaces/http/handler/auth_handler.go`
+Handlers translate HTTP requests to service calls:
 
 ```go
-// AuthHandler handles HTTP requests for auth endpoints
-type AuthHandler struct {
-    service   *auth.Service    // Depends on APPLICATION layer
-    validator *validator.Validator
-}
-
-// Register handles POST /auth/register
+// internal/handler/auth_handler.go
 func (h *AuthHandler) Register(c *gin.Context) {
-    // 1. Parse JSON request body into DTO
+    // 1. Parse JSON body
     var req auth.RegisterRequest
     if err := c.ShouldBindJSON(&req); err != nil {
         response.BadRequest(c, "Invalid request body")
         return
     }
     
-    // 2. Validate the request
-    if validationErrors := h.validator.Validate(req); validationErrors != nil {
-        response.ValidationError(c, validationErrors)
+    // 2. Validate
+    if errors := h.validator.Validate(req); errors != nil {
+        response.ValidationError(c, errors)
         return
     }
     
-    // 3. Call the service (business logic)
-    result, err := h.service.Register(c.Request.Context(), req)
+    // 3. Call service
+    result, err := h.authService.Register(c.Request.Context(), req)
     if err != nil {
-        response.Error(c, err)  // Error handler maps errors to HTTP status codes
+        response.Error(c, err)
         return
     }
     
-    // 4. Send success response
+    // 4. Return response
     response.Created(c, result)
 }
 ```
 
-**Key Learnings:**
-- Handlers are **thin** - they only:
-  1. Parse requests
-  2. Validate input
-  3. Call the service
-  4. Format the response
-- All business logic is in the **service**, not the handler
-- `c.Request.Context()` passes the request context for cancellation/timeout
+**Handlers are THIN:** They only:
+1. Parse request
+2. Validate input
+3. Call service
+4. Format response
 
-#### 📁 `internal/interfaces/http/router/router.go`
+---
+
+### 8. Middleware (`internal/middleware/`)
+
+Middleware runs **before** or **after** handlers:
 
 ```go
-// Router holds all route dependencies
-type Router struct {
-    cfg            *config.Config
-    authMiddleware *middleware.AuthMiddleware
-    authHandler    *handler.AuthHandler
-    movieHandler   *handler.MovieHandler
-    cinemaHandler  *handler.CinemaHandler
-    showtimeHandler *handler.ShowtimeHandler
+// Authentication middleware
+func (m *AuthMiddleware) Authenticate() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        // Get token from header
+        token := c.GetHeader("Authorization")
+        token = strings.TrimPrefix(token, "Bearer ")
+        
+        // Validate JWT
+        claims, err := m.jwtManager.ValidateAccessToken(token)
+        if err != nil {
+            response.Unauthorized(c, "Invalid token")
+            c.Abort()  // Stop the chain!
+            return
+        }
+        
+        // Store user info in context
+        c.Set("user_id", claims.UserID)
+        c.Set("user_role", claims.Role)
+        
+        c.Next()  // Continue to handler
+    }
 }
+```
 
-// Setup configures all routes
+**Common middleware:**
+- **Auth:** Verify JWT tokens
+- **CORS:** Allow cross-origin requests
+- **Logging:** Log all requests
+- **Recovery:** Catch panics
+
+---
+
+### 9. Router (`internal/router/`)
+
+The router maps URLs to handlers:
+
+```go
 func (r *Router) Setup() *gin.Engine {
     router := gin.New()
     
-    // Global middleware (applied to all routes)
+    // Global middleware (runs on ALL requests)
     router.Use(middleware.RecoveryMiddleware(r.logger))
-    router.Use(middleware.RequestIDMiddleware())
     router.Use(middleware.LoggingMiddleware(r.logger))
     
-    // API routes
+    // API v1 routes
     v1 := router.Group("/api/v1")
     {
-        // Auth routes (public)
+        // Public routes (no auth required)
         auth := v1.Group("/auth")
         {
             auth.POST("/register", r.authHandler.Register)
             auth.POST("/login", r.authHandler.Login)
-            
-            // Protected routes (require authentication)
-            auth.POST("/logout", r.authMiddleware.Authenticate(), r.authHandler.Logout)
-            auth.GET("/me", r.authMiddleware.Authenticate(), r.authHandler.GetCurrentUser)
         }
         
-        // Movie routes
+        // Protected routes (auth required)
         movies := v1.Group("/movies")
         {
-            movies.GET("", r.movieHandler.List)  // Public: anyone can list movies
+            movies.GET("", r.movieHandler.List)  // Public
             
-            // Admin only routes
-            movies.POST("", r.authMiddleware.Authenticate(), r.authMiddleware.RequireAdmin(), r.movieHandler.Create)
+            // Admin only
+            movies.POST("", 
+                r.authMiddleware.Authenticate(),
+                r.authMiddleware.RequireAdmin(),
+                r.movieHandler.Create,
+            )
         }
     }
     
@@ -454,310 +527,203 @@ func (r *Router) Setup() *gin.Engine {
 }
 ```
 
-**Key Learnings:**
-- Routes are organized by resource (`/auth`, `/movies`, `/cinemas`)
-- Middleware can be applied globally or to specific routes
-- `authMiddleware.Authenticate()` protects routes that require login
-- `authMiddleware.RequireAdmin()` adds role-based access control
-
 ---
 
-### 5. Entry Point & Dependency Injection
+## 🔄 Request Lifecycle
 
-#### 📁 `cmd/api/main.go`
-
-This is where everything comes together:
-
-```go
-func main() {
-    // 1. Load configuration
-    cfg, err := config.Load(configPath)
-    
-    // 2. Initialize infrastructure
-    db, err := postgres.New(cfg.Database, log)       // Database
-    redisClient, err := redis.New(cfg.Redis, log)    // Cache
-    
-    // 3. Create repositories (INFRASTRUCTURE implements DOMAIN interfaces)
-    userRepo := postgres.NewUserRepository(db)
-    movieRepo := postgres.NewMovieRepository(db)
-    cinemaRepo := postgres.NewCinemaRepository(db)
-    showtimeRepo := postgres.NewShowtimeRepository(db)
-    
-    // 4. Create infrastructure services
-    jwtManager := infraauth.NewJWTManager(cfg.JWT)
-    passwordManager := infraauth.NewPasswordManager()
-    
-    // 5. Create application services (inject dependencies)
-    authService := authapp.NewService(userRepo, refreshRepo, jwtManager, passwordManager, log)
-    movieService := movieapp.NewService(movieRepo, log)
-    cinemaService := cinemaapp.NewService(cinemaRepo, screenRepo, seatRepo, log)
-    showtimeService := showtimeapp.NewService(showtimeRepo, movieRepo, cinemaRepo, screenRepo, log)
-    
-    // 6. Create handlers (inject services)
-    authHandler := handler.NewAuthHandler(authService, requestValidator)
-    movieHandler := handler.NewMovieHandler(movieService, requestValidator)
-    
-    // 7. Create middleware
-    authMiddleware := middleware.NewAuthMiddleware(jwtManager, log)
-    
-    // 8. Create router (inject handlers and middleware)
-    appRouter := router.NewRouter(cfg, log, authMiddleware, authHandler, movieHandler, ...)
-    
-    // 9. Start server
-    srv := httpserver.NewServer(cfg.Server, appRouter.Setup(), log)
-    srv.Start()
-}
-```
-
-**This is Dependency Injection:**
-- Each component receives its dependencies through its constructor
-- The `main` function is the **composition root** - it wires everything together
-- No component creates its own dependencies
-
----
-
-## 🔄 Request Flow: How a Request Travels
-
-Let's trace a `POST /api/v1/auth/register` request:
+Here's how a request flows through the system:
 
 ```
-1. HTTP Request arrives
-   ↓
-2. Global Middleware runs:
-   - RecoveryMiddleware (catches panics)
-   - RequestIDMiddleware (adds unique ID for tracing)
-   - LoggingMiddleware (logs the request)
-   ↓
-3. Router matches URL → auth.POST("/register")
-   ↓
-4. AuthHandler.Register() called
-   - Parses JSON body into RegisterRequest
-   - Validates input
-   - Calls authService.Register()
-   ↓
-5. AuthService.Register() executes
-   - Checks if email exists (userRepo.GetByEmail)
-   - Hashes password (passwordManager.HashPassword)
-   - Creates user (userRepo.Create)
-   - Generates tokens (jwtManager.GenerateAccessToken)
-   ↓
-6. UserRepository.Create() runs
-   - Executes INSERT SQL via GORM
-   - Returns success or error
-   ↓
-7. Response flows back up
-   - Service returns AuthResponse
-   - Handler calls response.Created()
-   - JSON response sent to client
-```
-
----
-
-## 📦 Key Libraries Used
-
-| Library | Purpose | Where Used |
-|---------|---------|------------|
-| [Gin](https://github.com/gin-gonic/gin) | HTTP web framework | `interfaces/http/` |
-| [GORM](https://gorm.io) | ORM for database access | `infrastructure/persistence/` |
-| [Zap](https://github.com/uber-go/zap) | Structured logging | `pkg/logger/` |
-| [Viper](https://github.com/spf13/viper) | Configuration management | `config/` |
-| [go-playground/validator](https://github.com/go-playground/validator) | Input validation | `pkg/validator/` |
-| [golang-jwt/jwt](https://github.com/golang-jwt/jwt) | JWT tokens | `infrastructure/auth/` |
-| [google/uuid](https://github.com/google/uuid) | UUID generation | `domain/entity/` |
-
----
-
-## 📖 Studying the Code (Recommended Order)
-
-### Week 1: Foundation
-
-1. **Start with entities** - Read all files in `internal/domain/entity/`
-   - Understand how data is modeled
-   - Notice relationships between entities
-
-2. **Study repository interfaces** - `internal/domain/repository/`
-   - See what operations are defined
-   - Understand the contract pattern
-
-3. **Read one repository implementation** - `internal/infrastructure/persistence/postgres/user_repository.go`
-   - See how interfaces are implemented
-   - Learn GORM query patterns
-
-### Week 2: Business Logic
-
-4. **Read auth service** - `internal/application/auth/`
-   - Study `service.go` for business logic
-   - Look at `dto.go` for request/response shapes
-
-5. **Read movie service** - `internal/application/movie/`
-   - Compare patterns with auth service
-
-### Week 3: HTTP Layer
-
-6. **Read handlers** - `internal/interfaces/http/handler/`
-   - See how HTTP requests are processed
-   - Notice the thin handler pattern
-
-7. **Read middleware** - `internal/interfaces/http/middleware/`
-   - Understand authentication flow
-   - See how logging/recovery work
-
-8. **Read router** - `internal/interfaces/http/router/router.go`
-   - See how routes are organized
-   - Understand middleware application
-
-### Week 4: Infrastructure
-
-9. **Read main.go** - `cmd/api/main.go`
-   - Understand dependency injection
-   - See how everything connects
-
-10. **Read configuration** - `config/`
-    - Learn about environment variables
-    - Understand configuration patterns
-
----
-
-## 🎯 Common Patterns Explained
-
-### Pattern 1: Constructor Injection
-
-```go
-// Instead of creating dependencies inside the struct:
-// ❌ BAD
-type Service struct {
-    repo *UserRepository  // concrete type
-}
-func (s *Service) DoSomething() {
-    s.repo = NewUserRepository()  // creates its own dependency
-}
-
-// Inject dependencies through constructor:
-// ✅ GOOD
-type Service struct {
-    repo repository.UserRepository  // interface type
-}
-func NewService(repo repository.UserRepository) *Service {
-    return &Service{repo: repo}  // dependency injected from outside
-}
-```
-
-### Pattern 2: Interface for Testability
-
-```go
-// Define interface in DOMAIN layer
-type UserRepository interface {
-    GetByEmail(ctx context.Context, email string) (*User, error)
-}
-
-// Implement in INFRASTRUCTURE layer
-type postgresUserRepo struct { db *Database }
-func (r *postgresUserRepo) GetByEmail(ctx context.Context, email string) (*User, error) {
-    // Real database call
-}
-
-// For testing, create a mock
-type mockUserRepo struct { users map[string]*User }
-func (r *mockUserRepo) GetByEmail(ctx context.Context, email string) (*User, error) {
-    if user, ok := r.users[email]; ok {
-        return user, nil
+Client: POST /api/v1/auth/register
+        {"email": "john@example.com", "password": "secret123"}
+            │
+            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  1. MIDDLEWARE CHAIN                                         │
+│     RecoveryMiddleware → LoggingMiddleware → CORSMiddleware │
+└─────────────────────────────────────────────────────────────┘
+            │
+            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  2. ROUTER                                                   │
+│     Matches POST /api/v1/auth/register → authHandler.Register│
+└─────────────────────────────────────────────────────────────┘
+            │
+            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  3. HANDLER (internal/handler/auth_handler.go)              │
+│     - Parses JSON body into RegisterRequest                  │
+│     - Validates fields                                       │
+│     - Calls authService.Register(req)                        │
+└─────────────────────────────────────────────────────────────┘
+            │
+            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  4. SERVICE (internal/app/auth/service.go)                  │
+│     - Checks if email exists (userRepo.EmailExists)          │
+│     - Hashes password (passwordMgr.HashPassword)             │
+│     - Creates user (userRepo.Create)                         │
+│     - Generates JWT (jwtManager.GenerateAccessToken)         │
+│     - Returns AuthResponse                                   │
+└─────────────────────────────────────────────────────────────┘
+            │
+            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  5. REPOSITORY (internal/app/postgres/user_repository.go)   │
+│     - Executes: INSERT INTO users (...)                      │
+│     - Returns created user                                   │
+└─────────────────────────────────────────────────────────────┘
+            │
+            ▼
+CLIENT RECEIVES:
+{
+    "success": true,
+    "data": {
+        "access_token": "eyJhbGciOiJIUzI1NiIs...",
+        "user": { "id": "...", "email": "john@example.com" }
     }
-    return nil, errors.New("not found")
 }
 ```
 
-### Pattern 3: Error Wrapping
+---
+
+## 🧠 Key Concepts Explained
+
+### Dependency Injection
+
+Instead of creating dependencies inside a struct, we **inject** them:
 
 ```go
-// Create domain-specific errors
-var ErrNotFound = errors.New("not found")
-var ErrConflict = errors.New("conflict")
+// ❌ BAD - Hard to test, tightly coupled
+type UserService struct {}
 
-// Wrap with context
-func (r *userRepo) GetByID(ctx context.Context, id uuid.UUID) (*User, error) {
-    err := r.db.First(&user, id).Error
-    if errors.Is(err, gorm.ErrRecordNotFound) {
-        return nil, apperrors.New(apperrors.CodeNotFound, "user not found")
+func (s *UserService) GetUser(id string) *User {
+    db := database.Connect()  // Creates its own dependency!
+    return db.FindUser(id)
+}
+
+// ✅ GOOD - Testable, loosely coupled
+type UserService struct {
+    repo repository.UserRepository  // Injected!
+}
+
+func NewUserService(repo repository.UserRepository) *UserService {
+    return &UserService{repo: repo}
+}
+```
+
+**In `main.go`, we wire everything:**
+```go
+db := postgres.New(cfg.Database)
+userRepo := postgres.NewUserRepository(db)
+userService := auth.NewService(userRepo, ...)
+userHandler := handler.NewAuthHandler(userService, ...)
+```
+
+---
+
+### Context (`context.Context`)
+
+Context carries request-scoped values and cancellation signals:
+
+```go
+func (s *Service) GetUser(ctx context.Context, id uuid.UUID) (*User, error) {
+    // If the HTTP request is cancelled, ctx.Done() fires
+    // GORM uses ctx for timeouts
+    return s.repo.GetByID(ctx, id)
+}
+```
+
+**Always pass context as the first parameter.**
+
+---
+
+### Error Handling
+
+Go doesn't have exceptions. Functions return errors:
+
+```go
+user, err := s.userRepo.GetByEmail(ctx, email)
+if err != nil {
+    // Handle error
+    return nil, err
+}
+// Use user safely
+```
+
+This project uses custom error types for better API responses:
+
+```go
+// internal/pkg/errors/errors.go
+func ErrUserNotFound() error {
+    return &AppError{
+        Code:    CodeNotFound,
+        Message: "User not found",
     }
-    return nil, apperrors.Wrap(err, apperrors.CodeInternal, "database error")
-}
-```
-
-### Pattern 4: Context Propagation
-
-```go
-// Always pass context through the call chain
-func (h *Handler) GetUser(c *gin.Context) {
-    ctx := c.Request.Context()  // Get context from HTTP request
-    user, err := h.service.GetByID(ctx, id)
-}
-
-func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*User, error) {
-    return s.repo.GetByID(ctx, id)  // Pass context to repository
-}
-
-func (r *Repo) GetByID(ctx context.Context, id uuid.UUID) (*User, error) {
-    return r.db.WithContext(ctx).First(&user, id).Error  // Use context in query
 }
 ```
 
 ---
 
-## 🏋️ Exercises for Practice
+## 🚀 How to Run
 
-### Exercise 1: Add a New Field
+### Prerequisites
+- Go 1.21+
+- Docker & Docker Compose
 
-Add a `phone_number` field to the User entity.
+### Steps
 
-1. Edit `internal/domain/entity/user.go`
-2. Edit `internal/application/auth/dto.go` (add to RegisterRequest)
-3. Edit `internal/application/auth/service.go` (map field in Register)
-4. Run migrations: `go run ./cmd/api` (AutoMigrate handles it)
+```bash
+# 1. Start database & Redis
+cd backend
+docker-compose -f deployments/docker-compose.yml up -d
 
-### Exercise 2: Add a New Endpoint
+# 2. Copy and configure environment
+cp .env.example .env
 
-Add `GET /api/v1/movies/:id/showtimes` to list showtimes for a movie.
+# 3. Run the application
+go run ./cmd/api
 
-1. Add method to `ShowtimeRepository` interface
-2. Implement in `postgres/showtime_repository.go`
-3. Add method to `ShowtimeService`
-4. Add handler in `ShowtimeHandler`
-5. Add route in `router.go`
-
-### Exercise 3: Add Validation
-
-Add validation to ensure `base_price` in showtimes is between 5.00 and 100.00.
-
-1. Edit `internal/application/showtime/dto.go`
-2. Add `validate:"min=5,max=100"` tag
-
-### Exercise 4: Create a New Module
-
-Create a simple "Feedback" module where users can submit feedback.
-
-Follow the pattern:
-1. Create `internal/domain/entity/feedback.go`
-2. Create interface in `internal/domain/repository/feedback_repository.go`
-3. Implement in `internal/infrastructure/persistence/postgres/feedback_repository.go`
-4. Create `internal/application/feedback/service.go` and `dto.go`
-5. Create `internal/interfaces/http/handler/feedback_handler.go`
-6. Wire in `cmd/api/main.go` and `router.go`
+# 4. Test the API
+curl http://localhost:8080/health
+```
 
 ---
 
-## 🎉 You Made It!
+## 🏋️ Exercises
 
-By understanding this architecture, you now know:
+### Exercise 1: Add a Field
+Add `phone_number` to the User entity and registration API.
 
-- ✅ How to structure a professional Go backend
-- ✅ Why Clean Architecture matters
-- ✅ How to separate concerns properly
-- ✅ How to use dependency injection
-- ✅ How to make code testable and maintainable
+**Files to modify:**
+1. `internal/app/entity/user.go` - Add field
+2. `internal/app/auth/dto.go` - Add to RegisterRequest
+3. `internal/app/auth/service.go` - Map the field
 
-**Next Steps:**
-- Implement the Booking module (the most complex one!)
-- Add unit tests for services
-- Deploy to a cloud provider
+### Exercise 2: Add an Endpoint
+Create `GET /api/v1/movies/:id/showtimes`.
 
-Happy coding! 🚀
+**Files to modify:**
+1. `internal/app/repository/` - Add interface method
+2. `internal/app/postgres/` - Implement it
+3. `internal/app/showtime/service.go` - Add service method
+4. `internal/handler/` - Add handler method
+5. `internal/router/router.go` - Add route
+
+### Exercise 3: Add Middleware
+Create a middleware that logs the response time of each request.
+
+**Hint:** Use `time.Since(start)` after `c.Next()`.
+
+---
+
+## 📚 Further Reading
+
+- [Gin Web Framework](https://gin-gonic.com/)
+- [GORM Documentation](https://gorm.io/)
+- [golang-standards/project-layout](https://github.com/golang-standards/project-layout)
+- [Effective Go](https://golang.org/doc/effective_go)
+
+---
+
+**Happy coding! 🎬**
