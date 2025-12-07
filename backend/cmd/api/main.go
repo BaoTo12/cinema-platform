@@ -10,18 +10,18 @@ import (
 	"os/signal"
 	"syscall"
 
-	"cinemaos-backend/config"
-	authapp "cinemaos-backend/internal/application/auth"
-	cinemaapp "cinemaos-backend/internal/application/cinema"
-	movieapp "cinemaos-backend/internal/application/movie"
-	showtimeapp "cinemaos-backend/internal/application/showtime"
-	infraauth "cinemaos-backend/internal/infrastructure/auth"
-	"cinemaos-backend/internal/infrastructure/persistence/postgres"
-	"cinemaos-backend/internal/infrastructure/persistence/redis"
-	"cinemaos-backend/internal/interfaces/http/handler"
-	"cinemaos-backend/internal/interfaces/http/middleware"
-	"cinemaos-backend/internal/interfaces/http/router"
-	httpserver "cinemaos-backend/internal/interfaces/http"
+	"cinemaos-backend/internal/config"
+	authapp "cinemaos-backend/internal/app/auth"
+	"cinemaos-backend/internal/app/authinfra"
+	cinemaapp "cinemaos-backend/internal/app/cinema"
+	movieapp "cinemaos-backend/internal/app/movie"
+	showtimeapp "cinemaos-backend/internal/app/showtime"
+	"cinemaos-backend/internal/app/postgres"
+	"cinemaos-backend/internal/app/redis"
+	"cinemaos-backend/internal/handler"
+	"cinemaos-backend/internal/middleware"
+	"cinemaos-backend/internal/router"
+	httpserver "cinemaos-backend/internal/server"
 	"cinemaos-backend/internal/pkg/logger"
 	"cinemaos-backend/internal/pkg/tracer"
 	"cinemaos-backend/internal/pkg/validator"
@@ -138,8 +138,8 @@ func main() {
 	showtimeRepo := postgres.NewShowtimeRepository(db)
 
 	// Infrastructure Services
-	jwtManager := infraauth.NewJWTManager(cfg.JWT)
-	passwordManager := infraauth.NewPasswordManager()
+	jwtManager := authinfra.NewJWTManager(cfg.JWT)
+	passwordManager := authinfra.NewPasswordManager()
 
 	// Application Services
 	authService := authapp.NewService(

@@ -1,0 +1,128 @@
+syntax = "proto3";
+
+package cinema.v1;
+
+option go_package = "github.com/cinemaos/backend/gen/cinema/v1;cinemav1";
+
+// Movies Service
+service MoviesService {
+  rpc ListMovies(ListMoviesRequest) returns (ListMoviesResponse);
+  rpc GetMovie(GetMovieRequest) returns (GetMovieResponse);
+  rpc GetNowShowing(GetNowShowingRequest) returns (GetNowShowingResponse);
+  rpc CreateMovie(CreateMovieRequest) returns (CreateMovieResponse);
+  rpc UpdateMovie(UpdateMovieRequest) returns (UpdateMovieResponse);
+  rpc DeleteMovie(DeleteMovieRequest) returns (DeleteMovieResponse);
+}
+
+message ListMoviesRequest {
+  int32 page = 1;
+  int32 limit = 2;
+  optional string search = 3;
+  optional string genre = 4;
+  optional string format = 5;
+  optional bool is_active = 6;
+}
+
+message ListMoviesResponse {
+  repeated Movie movies = 1;
+  Pagination pagination = 2;
+}
+
+message GetMovieRequest {
+  string id = 1;
+}
+
+message GetMovieResponse {
+  Movie movie = 1;
+}
+
+message GetNowShowingRequest {
+  optional string cinema_id = 1;
+  int32 page = 2;
+  int32 limit = 3;
+}
+
+message GetNowShowingResponse {
+  repeated Movie movies = 1;
+  Pagination pagination = 2;
+}
+
+message CreateMovieRequest {
+  string title = 1;
+  optional string original_title = 2;
+  optional string description = 3;
+  int32 duration = 4;
+  string release_date = 5;
+  optional string rating = 6;
+  optional string language = 7;
+  repeated string genres = 8;
+  optional string director = 9;
+  repeated string cast = 10;
+  optional string poster_url = 11;
+  optional string backdrop_url = 12;
+  optional string trailer_url = 13;
+  string format = 14;
+  double popularity_score = 15;
+}
+
+message CreateMovieResponse {
+  bool success = 1;
+  Movie movie = 2;
+}
+
+message UpdateMovieRequest {
+  string id = 1;
+  optional string title = 2;
+  optional string description = 3;
+  optional int32 duration = 4;
+  optional string rating = 5;
+  repeated string genres = 6;
+  optional string poster_url = 7;
+  optional string backdrop_url = 8;
+  optional string trailer_url = 9;
+  optional bool is_active = 10;
+  optional double popularity_score = 11;
+}
+
+message UpdateMovieResponse {
+  bool success = 1;
+  Movie movie = 2;
+}
+
+message DeleteMovieRequest {
+  string id = 1;
+}
+
+message DeleteMovieResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message Movie {
+  string id = 1;
+  string title = 2;
+  optional string original_title = 3;
+  optional string description = 4;
+  int32 duration = 5;
+  string release_date = 6;
+  optional string rating = 7;
+  optional string language = 8;
+  repeated string genres = 9;
+  optional string director = 10;
+  repeated string cast = 11;
+  optional string poster_url = 12;
+  optional string backdrop_url = 13;
+  optional string trailer_url = 14;
+  string format = 15;
+  bool is_active = 16;
+  double popularity_score = 17;
+  string created_at = 18;
+  string updated_at = 19;
+}
+
+message Pagination {
+  int32 page = 1;
+  int32 limit = 2;
+  int32 total = 3;
+  int32 total_pages = 4;
+}

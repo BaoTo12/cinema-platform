@@ -1,0 +1,132 @@
+syntax = "proto3";
+
+package cinema.v1;
+
+option go_package = "github.com/cinemaos/backend/gen/cinema/v1;cinemav1";
+
+import "cinema/v1/movies.proto";
+
+// Showtimes Service
+service ShowtimesService {
+  rpc ListShowtimes(ListShowtimesRequest) returns (ListShowtimesResponse);
+  rpc GetShowtime(GetShowtimeRequest) returns (GetShowtimeResponse);
+  rpc GetSeatMap(GetSeatMapRequest) returns (GetSeatMapResponse);
+  rpc CreateShowtime(CreateShowtimeRequest) returns (CreateShowtimeResponse);
+  rpc GenerateSchedule(GenerateScheduleRequest) returns (GenerateScheduleResponse);
+}
+
+message ListShowtimesRequest {
+  string cinema_id = 1;
+  optional string movie_id = 2;
+  string date = 3;
+}
+
+message ListShowtimesResponse {
+  repeated Showtime showtimes = 1;
+}
+
+message GetShowtimeRequest {
+  string id = 1;
+}
+
+message GetShowtimeResponse {
+  Showtime showtime = 1;
+}
+
+message GetSeatMapRequest {
+  string showtime_id = 1;
+}
+
+message GetSeatMapResponse {
+  string showtime_id = 1;
+  int32 total_seats = 2;
+  int32 available_seats = 3;
+  SeatLayout layout = 4;
+}
+
+message CreateShowtimeRequest {
+  string screen_id = 1;
+  string movie_id = 2;
+  string cinema_id = 3;
+  string show_date = 4;
+  string start_time = 5;
+  string end_time = 6;
+}
+
+message CreateShowtimeResponse {
+  bool success = 1;
+  Showtime showtime = 2;
+}
+
+message GenerateScheduleRequest {
+  string cinema_id = 1;
+  string date = 2;
+  repeated string movie_ids = 3;
+  SchedulePreferences preferences = 4;
+}
+
+message GenerateScheduleResponse {
+  bool success = 1;
+  int32 total_shows = 2;
+  repeated Showtime showtimes = 3;
+  ScheduleMetrics metrics = 4;
+}
+
+message Showtime {
+  string id = 1;
+  string screen_id = 2;
+  string movie_id = 3;
+  string cinema_id = 4;
+  string show_date = 5;
+  string start_time = 6;
+  string end_time = 7;
+  string price_tier = 8;
+  int32 total_seats = 9;
+  int32 available_seats = 10;
+  bool is_auto_generated = 11;
+  string status = 12;
+  Movie movie = 13;
+  Screen screen = 14;
+}
+
+message Screen {
+  string id = 1;
+  string cinema_id = 2;
+  string name = 3;
+  int32 capacity = 4;
+  string screen_type = 5;
+  repeated string supported_formats = 6;
+}
+
+message SeatLayout {
+  repeated SeatRow rows = 1;
+}
+
+message SeatRow {
+  string label = 1;
+  repeated Seat seats = 2;
+}
+
+message Seat {
+  string id = 1;
+  int32 seat_number = 2;
+  string type = 3;
+  string status = 4;
+  double price = 5;
+  Position position = 6;
+}
+
+message Position {
+  double x = 1;
+  double y = 2;
+}
+
+message SchedulePreferences {
+  int32 min_shows_per_movie = 1;
+  int32 max_shows_per_movie = 2;
+}
+
+message ScheduleMetrics {
+  double avg_utilization = 1;
+  int32 peak_shows = 2;
+}
