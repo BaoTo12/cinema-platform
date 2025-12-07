@@ -827,6 +827,329 @@ curl http://localhost:8080/health
 
 ---
 
+## 🧵 Go Concurrency Deep Dive
+
+### What is `context.Context`? (Explained Simply)
+
+`context.Context` is like a **messenger bag** that travels with your request through all layers of your application. It carries:
+
+1. **Cancellation signal** - "Stop what you're doing, user closed the browser"
+2. **Deadline/Timeout** - "You have 30 seconds to finish"
+3. **Request-scoped values** - "This request is from user ID 123"
+
+```go
+// WITHOUT context - you can't stop a slow operation
+func GetUser(id int) (*User, error) {
+    // If database takes 5 minutes, you have to wait
+    return db.Find(id)
+}
+
+// WITH context - you can cancel or timeout
+func GetUser(ctx context.Context, id int) (*User, error) {
+    // If context is cancelled, stop immediately
+    return db.WithContext(ctx).Find(id)
+}
+```
+
+### Context Lifecycle Example
+
+```
+HTTP Request arrives
+       │
+       ├── Gin creates ctx with timeout (30s)
+       │
+       ▼
+Handler receives ctx
+       │
+       ├── ctx is passed to Service
+       │
+       ▼
+Service uses ctx
+       │
+       ├── ctx is passed to Repository
+       │
+       ▼
+Repository uses ctx
+       │
+       ├── db.WithContext(ctx).Query(...)
+       │
+       ▼
+If user closes browser OR timeout reached:
+       │
+       └── ctx.Done() fires → all operations cancel
+```
+
+### Creating and Using Context
+
+```go
+// 1. From HTTP request (most common)
+func (h *Handler) GetUser(c *gin.Context) {
+    ctx := c.Request.Context()  // This ctx has HTTP timeout
+    user, err := h.service.GetUser(ctx, id)
+}
+
+// 2. With timeout
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()  // ALWAYS call cancel to release resources
+result, err := slowOperation(ctx)
+
+// 3. With cancellation
+ctx, cancel := context.WithCancel(context.Background())
+go func() {
+    // Cancel when user presses Ctrl+C
+    <-signals
+    cancel()
+}()
+
+// 4. With values (for request ID, user info)
+ctx = context.WithValue(ctx, "request_id", "abc-123")
+requestID := ctx.Value("request_id").(string)
+```
+
+### Checking if Context is Done
+
+```go
+func slowOperation(ctx context.Context) error {
+    for i := 0; i < 1000000; i++ {
+        // Check periodically if we should stop
+        select {
+        case <-ctx.Done():
+            return ctx.Err()  // Returns "context canceled" or "deadline exceeded"
+        default:
+            // Continue working
+        }
+        doSomeWork()
+    }
+    return nil
+}
+```
+
+---
+
+## ⚡ Concurrency Patterns in This Project
+
+This project implements several modern Go concurrency patterns:
+
+### 1. Worker Pool (`internal/pkg/worker/pool.go`)
+
+**What is it?** A fixed number of goroutines processing jobs from a shared queue.
+
+**Why?** Prevents spawning unlimited goroutines. Controls memory usage.
+
+```go
+                  ┌─────────────┐
+                  │  Job Queue  │  (buffered channel)
+                  │ ────────────│
+                  │ Job1 Job2 ..│
+                  └──────┬──────┘
+                         │
+         ┌───────────────┼───────────────┐
+         │               │               │
+         ▼               ▼               ▼
+   ┌──────────┐    ┌──────────┐    ┌──────────┐
+   │ Worker 1 │    │ Worker 2 │    │ Worker 3 │
+   │ goroutine│    │ goroutine│    │ goroutine│
+   └──────────┘    └──────────┘    └──────────┘
+```
+
+**Code Example:**
+```go
+// Create pool with 5 workers, queue size 100
+pool := worker.NewPool("email-sender", 5, 100, logger)
+pool.Start()
+
+// Submit a job (non-blocking)
+pool.Submit(worker.Job{
+    ID:   "job-123",
+    Type: "email",
+    Payload: EmailPayload{To: "user@example.com"},
+    Handler: func(ctx context.Context, payload interface{}) error {
+        email := payload.(EmailPayload)
+        return sendEmail(email)
+    },
+})
+
+// Graceful shutdown
+pool.Stop(10 * time.Second)
+```
+
+---
+
+### 2. Circuit Breaker (`internal/pkg/circuitbreaker/breaker.go`)
+
+**What is it?** A pattern that prevents your app from repeatedly calling a failing service.
+
+**Why?** If an external API is down, don't waste time trying. Fail fast.
+
+```
+   CLOSED (normal)
+       │
+       │ failures >= threshold
+       ▼
+     OPEN (failing)
+       │
+       │ timeout elapsed
+       ▼
+   HALF-OPEN (testing)
+       │
+       ├── success → CLOSED
+       │
+       └── failure → OPEN
+```
+
+**Code Example:**
+```go
+cb := circuitbreaker.New(circuitbreaker.Config{
+    Name:        "payment-api",
+    MaxFailures: 5,            // Open after 5 failures
+    Timeout:     30 * time.Second,  // Try again after 30s
+}, logger)
+
+err := cb.Execute(ctx, func(ctx context.Context) error {
+    return callPaymentAPI(ctx, amount)
+})
+
+if errors.Is(err, circuitbreaker.ErrCircuitOpen) {
+    // Circuit is open, use fallback
+    return useCachedResult()
+}
+```
+
+---
+
+### 3. Parallel Execution (`internal/pkg/concurrent/parallel.go`)
+
+**What is it?** Run multiple independent operations at the same time.
+
+**Why?** If you need movie + showtimes + reviews, fetch all at once instead of one-by-one.
+
+```go
+// WITHOUT parallel - takes 300ms (100 + 100 + 100)
+movie, _ := getMovie(ctx, id)       // 100ms
+showtimes, _ := getShowtimes(ctx, id)  // 100ms
+reviews, _ := getReviews(ctx, id)   // 100ms
+
+// WITH parallel - takes 100ms (all run simultaneously)
+var movie *Movie
+var showtimes []*Showtime
+var reviews []*Review
+
+err := concurrent.Parallel(ctx,
+    func(ctx context.Context) error {
+        var err error
+        movie, err = getMovie(ctx, id)
+        return err
+    },
+    func(ctx context.Context) error {
+        var err error
+        showtimes, err = getShowtimes(ctx, id)
+        return err
+    },
+    func(ctx context.Context) error {
+        var err error
+        reviews, err = getReviews(ctx, id)
+        return err
+    },
+)
+```
+
+**FanOut - Process Multiple Items:**
+```go
+// Process 10 images concurrently
+imageURLs := []string{"img1.jpg", "img2.jpg", ...}
+
+results, err := concurrent.FanOut(ctx, imageURLs, func(ctx context.Context, url string) (ProcessedImage, error) {
+    return processImage(ctx, url)
+})
+```
+
+---
+
+### 4. Async Dispatcher (`internal/pkg/async/dispatcher.go`)
+
+**What is it?** A way to run background tasks without blocking HTTP responses.
+
+**Why?** Sending an email takes 2 seconds. Don't make the user wait.
+
+```go
+// In your auth service
+func (s *Service) Register(ctx context.Context, req RegisterRequest) (*AuthResponse, error) {
+    // Create user (fast)
+    user, err := s.userRepo.Create(ctx, user)
+    
+    // Send welcome email in background (doesn't block response)
+    s.dispatcher.SubmitEmail(async.EmailPayload{
+        To:      []string{user.Email},
+        Subject: "Welcome to CinemaOS!",
+        Body:    "Thank you for registering...",
+    })
+    
+    return &AuthResponse{User: user}, nil  // Returns immediately!
+}
+```
+
+---
+
+### 5. Semaphore (`internal/pkg/concurrent/parallel.go`)
+
+**What is it?** Limits how many goroutines can run at once.
+
+**Why?** You want parallelism but not unlimited. Like a nightclub bouncer.
+
+```go
+// Only allow 10 concurrent API calls
+sem := concurrent.NewSemaphore(10)
+
+for _, item := range items {
+    item := item
+    go func() {
+        sem.Acquire(ctx)  // Wait for slot
+        defer sem.Release()  // Release when done
+        
+        processItem(item)
+    }()
+}
+```
+
+---
+
+### Goroutines & Channels Basics
+
+```go
+// GOROUTINE - A lightweight thread
+go func() {
+    // This runs concurrently
+    fmt.Println("Hello from goroutine")
+}()
+
+// CHANNEL - Communication between goroutines
+ch := make(chan string)  // Create channel
+
+go func() {
+    ch <- "Hello"  // Send to channel
+}()
+
+msg := <-ch  // Receive from channel (blocks until data arrives)
+fmt.Println(msg)  // "Hello"
+
+// BUFFERED CHANNEL - Can hold multiple values without blocking
+ch := make(chan string, 10)  // Can hold 10 items
+
+// SELECT - Wait on multiple channels
+select {
+case msg := <-ch1:
+    fmt.Println("Got from ch1:", msg)
+case msg := <-ch2:
+    fmt.Println("Got from ch2:", msg)
+case <-ctx.Done():
+    fmt.Println("Context cancelled")
+case <-time.After(5 * time.Second):
+    fmt.Println("Timeout!")
+}
+```
+
+---
+
 ## 🏋️ Exercises with Solutions
 
 ### Exercise 1: Phone Field ✅
@@ -843,6 +1166,41 @@ Implemented as `GET /api/v1/movies/:id/showtimes`
 ### Exercise 3: Response Time Middleware ✅
 Implemented in `internal/middleware/responsetime.go`
 
+### NEW Exercise 4: Use Parallel Fetching
+**Challenge:** Modify `GetByID` in movie service to fetch movie and showtimes in parallel.
+
+**Hint:**
+```go
+import "cinemaos-backend/internal/pkg/concurrent"
+
+func (s *Service) GetByIDWithShowtimes(ctx context.Context, id uuid.UUID) (*MovieDetailResponse, error) {
+    var movie *entity.Movie
+    var showtimes []*entity.Showtime
+    
+    err := concurrent.Parallel(ctx,
+        func(ctx context.Context) error {
+            var err error
+            movie, err = s.movieRepo.GetByID(ctx, id)
+            return err
+        },
+        func(ctx context.Context) error {
+            var err error
+            showtimes, err = s.showtimeRepo.GetByMovieID(ctx, id)
+            return err
+        },
+    )
+    
+    if err != nil {
+        return nil, err
+    }
+    
+    return &MovieDetailResponse{
+        Movie:     s.toResponse(movie),
+        Showtimes: showtimes,
+    }, nil
+}
+```
+
 ---
 
 ## 📚 Next Steps
@@ -851,6 +1209,7 @@ Implemented in `internal/middleware/responsetime.go`
 2. **Add Tests** - Unit tests for services, integration tests for handlers
 3. **Add Swagger** - API documentation with `swag init`
 4. **Deploy** - Use the Dockerfile to deploy to AWS/GCP/Digital Ocean
+5. **Study Concurrency** - Review `internal/pkg/worker/`, `internal/pkg/concurrent/`, `internal/pkg/circuitbreaker/`
 
 ---
 
