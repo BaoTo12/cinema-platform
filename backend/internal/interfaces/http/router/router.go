@@ -20,6 +20,7 @@ type Router struct {
 	healthHandler  *handler.HealthHandler
 	movieHandler   *handler.MovieHandler
 	cinemaHandler  *handler.CinemaHandler
+	showtimeHandler *handler.ShowtimeHandler
 }
 
 // NewRouter creates a new router
@@ -31,6 +32,7 @@ func NewRouter(
 	healthHandler *handler.HealthHandler,
 	movieHandler *handler.MovieHandler,
 	cinemaHandler *handler.CinemaHandler,
+	showtimeHandler *handler.ShowtimeHandler,
 ) *Router {
 	return &Router{
 		cfg:            cfg,
@@ -40,6 +42,7 @@ func NewRouter(
 		healthHandler:  healthHandler,
 		movieHandler:   movieHandler,
 		cinemaHandler:  cinemaHandler,
+		showtimeHandler: showtimeHandler,
 	}
 }
 
@@ -116,13 +119,17 @@ func (r *Router) Setup() *gin.Engine {
 			cinemas.POST("/:id/screens", r.authMiddleware.Authenticate(), r.authMiddleware.RequireAdmin(), r.cinemaHandler.AddScreen)
 		}
 
-		// Showtimes routes (to be implemented)
-		// showtimes := v1.Group("/showtimes")
-		// {
-		// 	showtimes.GET("", showtimeHandler.List)
-		// 	showtimes.GET("/:id", showtimeHandler.GetByID)
-		// 	showtimes.GET("/:id/seats", showtimeHandler.GetAvailableSeats)
-		// }
+		// Showtime routes
+		showtimes := v1.Group("/showtimes")
+		{
+			showtimes.GET("", r.showtimeHandler.List)
+			showtimes.GET("/:id", r.showtimeHandler.GetByID)
+			
+			// Admin only
+			showtimes.POST("", r.authMiddleware.Authenticate(), r.authMiddleware.RequireAdmin(), r.showtimeHandler.Create)
+			showtimes.PUT("/:id", r.authMiddleware.Authenticate(), r.authMiddleware.RequireAdmin(), r.showtimeHandler.Update)
+			showtimes.DELETE("/:id", r.authMiddleware.Authenticate(), r.authMiddleware.RequireAdmin(), r.showtimeHandler.Delete)
+		}
 
 		// Bookings routes (to be implemented)
 		// bookings := v1.Group("/bookings")

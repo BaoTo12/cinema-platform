@@ -14,6 +14,7 @@ import (
 	authapp "cinemaos-backend/internal/application/auth"
 	cinemaapp "cinemaos-backend/internal/application/cinema"
 	movieapp "cinemaos-backend/internal/application/movie"
+	showtimeapp "cinemaos-backend/internal/application/showtime"
 	infraauth "cinemaos-backend/internal/infrastructure/auth"
 	"cinemaos-backend/internal/infrastructure/persistence/postgres"
 	"cinemaos-backend/internal/infrastructure/persistence/redis"
@@ -134,6 +135,7 @@ func main() {
 	cinemaRepo := postgres.NewCinemaRepository(db)
 	screenRepo := postgres.NewScreenRepository(db)
 	seatRepo := postgres.NewSeatRepository(db)
+	showtimeRepo := postgres.NewShowtimeRepository(db)
 
 	// Infrastructure Services
 	jwtManager := infraauth.NewJWTManager(cfg.JWT)
@@ -151,6 +153,7 @@ func main() {
 	)
 	movieService := movieapp.NewService(movieRepo, log)
 	cinemaService := cinemaapp.NewService(cinemaRepo, screenRepo, seatRepo, log)
+	showtimeService := showtimeapp.NewService(showtimeRepo, movieRepo, cinemaRepo, screenRepo, log)
 
 	// Validator
 	requestValidator := validator.New()
@@ -160,6 +163,7 @@ func main() {
 	healthHandler := handler.NewHealthHandler(cfg, db, redisClient)
 	movieHandler := handler.NewMovieHandler(movieService, requestValidator)
 	cinemaHandler := handler.NewCinemaHandler(cinemaService, requestValidator)
+	showtimeHandler := handler.NewShowtimeHandler(showtimeService, requestValidator)
 
 	// Middleware
 	authMiddleware := middleware.NewAuthMiddleware(jwtManager, log)
@@ -173,6 +177,7 @@ func main() {
 		healthHandler,
 		movieHandler,
 		cinemaHandler,
+		showtimeHandler,
 	)
 
 	// Server
