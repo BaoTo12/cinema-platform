@@ -30,26 +30,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// @title           CinemaOS API
-// @version         1.0
-// @description     Cinema Operating System Backend API
-// @termsOfService  http://swagger.io/terms/
-
-// @contact.name    API Support
-// @contact.url     http://www.swagger.io/support
-// @contact.email   support@cinemaos.com
-
-// @license.name    Apache 2.0
-// @license.url     http://www.apache.org/licenses/LICENSE-2.0.html
-
-// @host            localhost:8080
-// @BasePath        /api/v1
-// @schemes         http https
-
-// @securityDefinitions.apikey BearerAuth
-// @in header
-// @name Authorization
-
 func main() {
 	var configPath string
 	flag.StringVar(&configPath, "config", "", "path to config file")
@@ -67,7 +47,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize logger
 	// Initialize logger
 	log, err := logger.New(logger.Config{
 		Level:      cfg.Logger.Level,
