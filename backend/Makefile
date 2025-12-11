@@ -1,4 +1,5 @@
 .PHONY: all build run test clean docker-build docker-run migrate-up migrate-down lint
+.PHONY: all build run test clean docker-build docker-run migrate-up migrate-down lint wire
 
 # Variables
 BINARY_NAME=main
@@ -9,6 +10,12 @@ all: build
 
 build:
 	go build -o tmp/$(BINARY_NAME) ./cmd/api
+
+.PHONY: wire
+wire:
+	@echo "Generating Wire dependency injection..."
+	cd cmd/api && wire
+	@echo "Wire generation complete"
 
 run: build
 	./tmp/$(BINARY_NAME)

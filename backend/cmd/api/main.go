@@ -10,22 +10,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	authapp "cinemaos-backend/internal/app/auth"
-	"cinemaos-backend/internal/app/authinfra"
-	cinemaapp "cinemaos-backend/internal/app/cinema"
-	movieapp "cinemaos-backend/internal/app/movie"
-	"cinemaos-backend/internal/app/postgres"
-	"cinemaos-backend/internal/app/redis"
-	showtimeapp "cinemaos-backend/internal/app/showtime"
-	"cinemaos-backend/internal/config"
-	"cinemaos-backend/internal/handler"
-	"cinemaos-backend/internal/middleware"
-	"cinemaos-backend/internal/pkg/logger"
-	"cinemaos-backend/internal/pkg/tracer"
-	"cinemaos-backend/internal/pkg/validator"
-	"cinemaos-backend/internal/router"
-	httpserver "cinemaos-backend/internal/server"
-
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 )
@@ -40,135 +24,36 @@ func main() {
 		fmt.Println("No .env file found, using environment variables")
 	}
 
-	// Load configuration
-	cfg, err := config.Load(configPath)
+	// Initialize application using Wire
+	app, err := InitializeApplication(configPath)
 	if err != nil {
-		fmt.Printf("Failed to load configuration: %v\n", err)
+		fmt.Printf("Failed to initialize application: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Initialize logger
-	log, err := logger.New(logger.Config{
-		Level:      cfg.Logger.Level,
-		Format:     cfg.Logger.Format,
-		Output:     cfg.Logger.Output,
-		TimeFormat: cfg.Logger.TimeFormat,
-	})
-	if err != nil {
-		fmt.Printf("Failed to initialize logger: %v\n", err)
-		os.Exit(1)
-	}
-
-	log.Info("Starting CinemaOS Backend",
-		zap.String("version", cfg.App.Version),
-		zap.String("environment", cfg.App.Environment),
+	app.Logger.Info("Starting CinemaOS Backend",
+		zap.String("message", "All dependencies injected via Google Wire"),
 	)
 
-	// Initialize tracer
-	tp, err := tracer.New(tracer.Config{
-		Enabled:     cfg.Tracer.Enabled,
-		ServiceName: cfg.Tracer.ServiceName,
-		Endpoint:    cfg.Tracer.Endpoint,
-		Insecure:    cfg.Tracer.Insecure,
-		SampleRate:  cfg.Tracer.SampleRate,
-		Environment: cfg.App.Environment,
-		Version:     cfg.App.Version,
-	})
-	if err != nil {
-		log.Fatal("Failed to initialize tracer", zap.Error(err))
-	}
+	// Cleanup resources on shutdown
 	defer func() {
-		if err := tp.Shutdown(context.Background()); err != nil {
-			log.Error("Failed to shutdown tracer", zap.Error(err))
+		if app.DB != nil {
+			app.DB.Close()
+		}
+		if app.RedisClient != nil {
+			app.RedisClient.Close()
+		}
+		if app.Tracer != nil {
+			if err := app.Tracer.Shutdown(context.Background()); err != nil {
+				app.Logger.Error("Failed to shutdown tracer", zap.Error(err))
+			}
 		}
 	}()
 
-	// Initialize Database
-	db, err := postgres.New(cfg.Database, log)
-	if err != nil {
-		log.Fatal("Failed to connect to database", zap.Error(err))
-	}
-	defer db.Close()
-
-	// Auto-migration is disabled. Using Goose now.
-	// if err := db.AutoMigrate(); err != nil {
-	// 	log.Fatal("Failed to run migrations", zap.Error(err))
-	// }
-
-	// Initialize Redis
-	// In a real scenario, you'd likely want to handle redis connection failure gracefully if it's optional
-	// But let's assume it's critical for auth caching
-	redisClient, err := redis.New(cfg.Redis, log)
-	if err != nil {
-		log.Error("Failed to connect to Redis", zap.Error(err))
-		// continue without redis or exit depending on requirements?
-		// for now, let's log and continue, but auth token revocation/caching might be affected
-	} else {
-		defer redisClient.Close()
-	}
-
-	// Repositories
-	userRepo := postgres.NewUserRepository(db)
-	refreshRepo := postgres.NewRefreshTokenRepository(db)
-	resetTokenRepo := postgres.NewPasswordResetTokenRepository(db)
-	movieRepo := postgres.NewMovieRepository(db)
-	cinemaRepo := postgres.NewCinemaRepository(db)
-	screenRepo := postgres.NewScreenRepository(db)
-	seatRepo := postgres.NewSeatRepository(db)
-	showtimeRepo := postgres.NewShowtimeRepository(db)
-
-	// Infrastructure Services
-	jwtManager := authinfra.NewJWTManager(cfg.JWT)
-	passwordManager := authinfra.NewPasswordManager()
-
-	// Application Services
-	authService := authapp.NewService(
-		userRepo,
-		refreshRepo,
-		resetTokenRepo,
-		jwtManager,
-		passwordManager,
-		log,
-		cfg.Email.FrontendURL,
-	)
-	movieService := movieapp.NewService(movieRepo, log)
-	cinemaService := cinemaapp.NewService(cinemaRepo, screenRepo, seatRepo, log)
-	showtimeService := showtimeapp.NewService(showtimeRepo, movieRepo, cinemaRepo, screenRepo, log)
-
-	// Validator
-	requestValidator := validator.New()
-
-	// Handlers
-	authHandler := handler.NewAuthHandler(authService, requestValidator)
-	healthHandler := handler.NewHealthHandler(cfg, db, redisClient)
-	movieHandler := handler.NewMovieHandler(movieService, showtimeService, requestValidator)
-	cinemaHandler := handler.NewCinemaHandler(cinemaService, requestValidator)
-	showtimeHandler := handler.NewShowtimeHandler(showtimeService, requestValidator)
-
-	// Middleware
-	authMiddleware := middleware.NewAuthMiddleware(jwtManager, log)
-
-	// Router
-	appRouter := router.NewRouter(
-		cfg,
-		log,
-		authMiddleware,
-		authHandler,
-		healthHandler,
-		movieHandler,
-		cinemaHandler,
-		showtimeHandler,
-	)
-
-	// Server
-	srv := httpserver.NewServer(cfg.Server, appRouter.Setup(), log)
-
-	// Graceful shutdown
+	// Start server
 	go func() {
-		if err := srv.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) { // http.ErrServerClosed
-			// http.NewServer wrapper might return a different error depending on implementation
-			// let's check standard http error
-			log.Fatal("Server failed to start", zap.Error(err))
+		if err := app.Server.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			app.Logger.Fatal("Server failed to start", zap.Error(err))
 		}
 	}()
 
@@ -177,14 +62,14 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Info("Shutting down server...")
+	app.Logger.Info("Shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), app.Config.Server.ShutdownTimeout)
 	defer cancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatal("Server forced to shutdown", zap.Error(err))
+	if err := app.Server.Shutdown(ctx); err != nil {
+		app.Logger.Fatal("Server forced to shutdown", zap.Error(err))
 	}
 
-	log.Info("Server exited properly")
+	app.Logger.Info("Server exited properly")
 }

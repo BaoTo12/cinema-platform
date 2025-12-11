@@ -1,0 +1,908 @@
+# Google Wire: Complete Guide from Basic to Advanced
+**Mastering Compile-Time Dependency Injection in Go**
+
+---
+
+## Table of Contents
+
+1. [Introduction](#introduction)
+2. [What is Dependency Injection?](#what-is-dependency-injection)
+3. [Why Wire? The Problem It Solves](#why-wire-the-problem-it-solves)
+4. [Core Concepts](#core-concepts)
+5. [Getting Started](#getting-started)
+6. [Basic Tutorial](#basic-tutorial)
+7. [Intermediate Techniques](#intermediate-techniques)
+8. [Advanced Patterns](#advanced-patterns)
+9. [Best Practices](#best-practices)
+10. [Troubleshooting](#troubleshooting)
+11. [Real-World Example](#real-world-example)
+12. [Comparison with Alternatives](#comparison-with-alternatives)
+
+---
+
+## Introduction
+
+**Google Wire** is a code generation tool that automates dependency injection (DI) for Go applications. Unlike runtime-based DI frameworks that use reflection, Wire generates **readable Go code** at compile time, making dependency management type-safe and zero-overhead.
+
+### Why You're Learning This
+
+In production Go applications at companies like Google, Uber, and Spotify, manual dependency injection becomes unmaintainable as the application grows. Wire solves this elegantly while maintaining Go's philosophy of explicit, readable code.
+
+---
+
+## What is Dependency Injection?
+
+### The Problem: Tightly Coupled Code
+
+```go
+// ❌ BAD: Tightly coupled
+type UserService struct {
+    db *Database
+}
+
+func NewUserService() *UserService {
+    // UserService CREATES its own database
+    db := &Database{ConnectionString: "localhost:5432"}
+    return &UserService{db: db}
+}
+```
+
+**Problems**:
+- Hard to test (can't mock the database)
+- Hard to configure (connection string is hardcoded)
+- UserService "knows too much" about Database
+
+### The Solution: Dependency Injection
+
+```go
+// ✅ GOOD: Dependency is injected
+type UserService struct {
+    db *Database
+}
+
+func NewUserService(db *Database) *UserService {
+    // UserService RECEIVES its database
+    return &UserService{db: db}
+}
+```
+
+**Benefits**:
+- Easy to test (pass a mock database)
+- Flexible configuration (caller controls database setup)
+- UserService focuses on its job, not infrastructure
+
+---
+
+## Why Wire? The Problem It Solves
+
+### The Manual DI Pain Point
+
+As your app grows, `main.go` becomes a nightmare:
+
+```go
+func main() {
+    // 🔴 This is what you want to avoid
+    cfg := config.Load()
+    logger := logger.New(cfg.Logger)
+    db := postgres.New(cfg.Database, logger)
+    cache := redis.New(cfg.Redis, logger)
+    
+    userRepo := repository.NewUserRepository(db)
+    productRepo := repository.NewProductRepository(db)
+    orderRepo := repository.NewOrderRepository(db)
+    
+    userService := service.NewUserService(userRepo, cache, logger)
+    productService := service.NewProductService(productRepo, cache, logger)
+    orderService := service.NewOrderService(orderRepo, userService, productService, logger)
+    
+    userHandler := handler.NewUserHandler(userService)
+    productHandler := handler.NewProductHandler(productService)
+    orderHandler := handler.NewOrderHandler(orderService)
+    
+    router := router.New(userHandler, productHandler, orderHandler)
+    server := server.New(cfg.Server, router, logger)
+    
+    server.Start()
+}
+```
+
+**Problems with Manual DI**:
+1. **Verbose** - 50+ lines just to wire dependencies
+2. **Error-Prone** - Easy to forget a dependency
+3. **Order Matters** - Must initialize in correct order
+4. **Hard to Refactor** - Changing a constructor signature breaks everything
+
+### Wire's Solution
+
+```go
+func main() {
+    // ✅ With Wire - one function call
+    app, err := InitializeApplication()
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    app.Server.Start()
+}
+```
+
+Wire generates all that boilerplate code for you!
+
+---
+
+## Core Concepts
+
+### 1. Providers
+
+A **provider** is a function that creates and returns a value. Wire uses providers to build your dependency graph.
+
+```go
+// Provider for Database
+func ProvideDatabase() (*Database, error) {
+    db, err := sql.Open("postgres", "connection_string")
+    if err != nil {
+        return nil, err
+    }
+    return &Database{DB: db}, nil
+}
+
+// Provider for UserRepository
+func ProvideUserRepository(db *Database) *UserRepository {
+    return &UserRepository{db: db}
+}
+
+// Provider for UserService
+func ProvideUserService(repo *UserRepository) *UserService {
+    return &UserService{repo: repo}
+}
+```
+
+**Key Points**:
+- Providers can return `(T, error)` or just `T`
+- Wire analyzes parameter types to determine dependencies
+- Each provider is called only once (singleton by default)
+
+### 2. Injectors
+
+An **injector** is a function annotated with `wire.Build()` that tells Wire what to construct.
+
+```go
+//go:build wireinject
+// +build wireinject
+
+package main
+
+import "github.com/google/wire"
+
+// This is the INJECTOR function
+func InitializeUserService() (*UserService, error) {
+    wire.Build(
+        ProvideDatabase,
+        ProvideUserRepository,
+        ProvideUserService,
+    )
+    return nil, nil  // This code is never executed
+}
+```
+
+**Important**:
+- The `//go:build wireinject` tag tells Go to ignore this file during normal builds
+- Wire reads this file and generates `wire_gen.go` with the actual implementation
+- The return statement is a placeholder
+
+### 3. Generated Code
+
+When you run `wire`, it generates `wire_gen.go`:
+
+```go
+//go:build !wireinject
+// +build !wireinject
+
+package main
+
+func InitializeUserService() (*UserService, error) {
+    database, err := ProvideDatabase()
+    if err != nil {
+        return nil, err
+    }
+    userRepository := ProvideUserRepository(database)
+    userService := ProvideUserService(userRepository)
+    return userService, nil
+}
+```
+
+Wire figured out the correct order and error handling!
+
+---
+
+## Getting Started
+
+### Installation
+
+```bash
+go install github.com/google/wire/cmd/wire@latest
+```
+
+### Basic Project Structure
+
+```
+myapp/
+├── cmd/
+│   └── app/
+│       ├── main.go          # Entry point
+│       ├── wire.go          # Injector definitions
+│       └── wire_gen.go      # Generated by Wire
+├── internal/
+│   ├── provider/            # Provider functions
+│   │   ├── config.go
+│   │   ├── database.go
+│   │   └── service.go
+│   ├── service/
+│   │   └── user.go
+│   └── repository/
+│       └── user.go
+├── go.mod
+└── go.sum
+```
+
+---
+
+## Basic Tutorial
+
+### Step 1: Create a Simple Service
+
+```go
+// internal/service/user.go
+package service
+
+type UserService struct {
+    db *Database
+}
+
+func (s *UserService) GetUser(id int) string {
+    return "User from " + s.db.Name
+}
+```
+
+### Step 2: Create Providers
+
+```go
+// internal/provider/database.go
+package provider
+
+type Database struct {
+    Name string
+}
+
+func ProvideDatabase() *Database {
+    return &Database{Name: "PostgreSQL"}
+}
+```
+
+```go
+// internal/provider/service.go
+package provider
+
+import "myapp/internal/service"
+
+func ProvideUserService(db *Database) *service.UserService {
+    return &service.UserService{DB: db}
+}
+```
+
+### Step 3: Create Injector
+
+```go
+// cmd/app/wire.go
+//go:build wireinject
+// +build wireinject
+
+package main
+
+import (
+    "myapp/internal/provider"
+    "myapp/internal/service"
+    "github.com/google/wire"
+)
+
+func InitializeUserService() *service.UserService {
+    wire.Build(
+        provider.ProvideDatabase,
+        provider.ProvideUserService,
+    )
+    return nil
+}
+```
+
+### Step 4: Write Main
+
+```go
+// cmd/app/main.go
+package main
+
+import "fmt"
+
+func main() {
+    userService := InitializeUserService()
+    user := userService.GetUser(1)
+    fmt.Println(user)
+}
+```
+
+### Step 5: Generate Wire Code
+
+```bash
+cd cmd/app
+wire
+```
+
+This creates `wire_gen.go`:
+
+```go
+// Code generated by Wire. DO NOT EDIT.
+//go:build !wireinject
+
+package main
+
+import (
+    "myapp/internal/provider"
+    "myapp/internal/service"
+)
+
+func InitializeUserService() *service.UserService {
+    database := provider.ProvideDatabase()
+    userService := provider.ProvideUserService(database)
+    return userService
+}
+```
+
+### Step 6: Run Your App
+
+```bash
+go run cmd/app/*.go
+```
+
+Output:
+```
+User from PostgreSQL
+```
+
+🎉 **Congratulations!** You've built your first Wire application!
+
+---
+
+## Intermediate Techniques
+
+### 1. Error Handling
+
+Providers can return errors:
+
+```go
+func ProvideDatabase(cfg *Config) (*Database, error) {
+    db, err := sql.Open("postgres", cfg.DSN)
+    if err != nil {
+        return nil, fmt.Errorf("failed to open database: %w", err)
+    }
+    return &Database{DB: db}, nil
+}
+```
+
+Wire propagates errors automatically:
+
+```go
+// Generated code
+func InitializeApp() (*App, error) {
+    config := ProvideConfig()
+    database, err := ProvideDatabase(config)
+    if err != nil {
+        return nil, err
+    }
+    // ... continues
+}
+```
+
+### 2. Provider Sets
+
+Group related providers:
+
+```go
+// internal/provider/infrastructure.go
+var InfrastructureSet = wire.NewSet(
+    ProvideLogger,
+    ProvideDatabase,
+    ProvideCache,
+)
+
+// internal/provider/repository.go
+var RepositorySet = wire.NewSet(
+    ProvideUserRepository,
+    ProvideProductRepository,
+)
+
+// wire.go
+func InitializeApp() *App {
+    wire.Build(
+        InfrastructureSet,  // Includes all infrastructure providers
+        RepositorySet,      // Includes all repositories
+        ProvideUserService,
+        wire.Struct(new(App), "*"),
+    )
+    return nil
+}
+```
+
+### 3. Struct Providers
+
+Use `wire.Struct` to automatically populate struct fields:
+
+```go
+type App struct {
+    Server  *Server
+    Logger  *Logger
+    DB      *Database
+}
+
+func InitializeApp() *App {
+    wire.Build(
+        ProvideServer,
+        ProvideLogger,
+        ProvideDatabase,
+        wire.Struct(new(App), "*"),  // Populates all fields
+    )
+    return nil
+}
+```
+
+Or specify specific fields:
+
+```go
+wire.Struct(new(App), "Server", "Logger")  // Only these two fields
+```
+
+### 4. Interfaces and Bindings
+
+Wire works with interfaces:
+
+```go
+type UserRepository interface {
+    GetUser(id int) (*User, error)
+}
+
+type PostgresUserRepository struct {
+    db *Database
+}
+
+func (r *PostgresUserRepository) GetUser(id int) (*User, error) {
+    // Implementation
+}
+
+// Provider returns concrete type
+func ProvidePostgresUserRepository(db *Database) *PostgresUserRepository {
+    return &PostgresUserRepository{db: db}
+}
+
+// Bind interface to implementation
+var RepositorySet = wire.NewSet(
+    ProvidePostgresUserRepository,
+    wire.Bind(new(UserRepository), new(*PostgresUserRepository)),
+)
+```
+
+Now services can depend on the interface:
+
+```go
+func ProvideUserService(repo UserRepository) *UserService {
+    return &UserService{repo: repo}
+}
+```
+
+### 5. Value Providers
+
+Provide simple values:
+
+```go
+func ProvidePort() int {
+    return 8080
+}
+
+func ProvideHost() string {
+    return "localhost"
+}
+
+func ProvideServerAddress(host string, port int) string {
+    return fmt.Sprintf("%s:%d", host, port)
+}
+```
+
+---
+
+## Advanced Patterns
+
+### 1. Cleanup Functions
+
+Return cleanup functions for resource management:
+
+```go
+type App struct {
+    Server  *Server
+    DB      *Database
+    Cleanup func()
+}
+
+func ProvideCleanup(db *Database, server *Server) func() {
+    return func() {
+        db.Close()
+        server.Shutdown()
+    }
+}
+
+func main() {
+    app := InitializeApp()
+    defer app.Cleanup()
+    
+    app.Server.Start()
+}
+```
+
+**⚠️ Wire Limitation**: Wire cannot inject `func()` types directly. You must expose resources in the App struct and create cleanup manually:
+
+```go
+type App struct {
+    Server *Server
+    DB     *Database
+}
+
+func main() {
+    app := InitializeApp()
+    defer func() {
+        app.DB.Close()
+        app.Server.Shutdown()
+    }()
+    
+    app.Server.Start()
+}
+```
+
+### 2. Configuration-Based Initialization
+
+Different providers based on config:
+
+```go
+func ProvideDatabase(cfg *Config) (*Database, error) {
+    switch cfg.DatabaseType {
+    case "postgres":
+        return NewPostgresDatabase(cfg.PostgresConfig)
+    case "mysql":
+        return NewMySQLDatabase(cfg.MySQLConfig)
+    default:
+        return nil, fmt.Errorf("unknown database type: %s", cfg.DatabaseType)
+    }
+}
+```
+
+### 3. Optional Dependencies
+
+Handle optional dependencies gracefully:
+
+```go
+func ProvideCache(cfg *Config) (*Cache, error) {
+    if !cfg.CacheEnabled {
+        return nil, nil  // Return nil for optional dependency
+    }
+    return NewRedisCache(cfg.RedisConfig)
+}
+
+func ProvideUserService(repo *UserRepository, cache *Cache) *UserService {
+    return &UserService{
+        repo:  repo,
+        cache: cache,  // Can be nil
+    }
+}
+```
+
+### 4. Multiple Instances of Same Type
+
+Use struct wrappers to distinguish:
+
+```go
+type ReadDB struct {
+    *Database
+}
+
+type WriteDB struct {
+    *Database
+}
+
+func ProvideReadDB(cfg *Config) (*ReadDB, error) {
+    db, err := connectDatabase(cfg.ReadDSN)
+    if err != nil {
+        return nil, err
+    }
+    return &ReadDB{db}, nil
+}
+
+func ProvideWriteDB(cfg *Config) (*WriteDB, error) {
+    db, err := connectDatabase(cfg.WriteDSN)
+    if err != nil {
+        return nil, err
+    }
+    return &WriteDB{db}, nil
+}
+
+func ProvideUserRepository(readDB *ReadDB, writeDB *WriteDB) *UserRepository {
+    return &UserRepository{
+        read:  readDB.Database,
+        write: writeDB.Database,
+    }
+}
+```
+
+### 5. Field Injection
+
+When you can't modify constructors:
+
+```go
+type ThirdPartyService struct {
+    DB     *Database       // Must be set after creation
+    Logger *Logger         // Must be set after creation
+}
+
+func ProvideThirdPartyService() *ThirdPartyService {
+    return &ThirdPartyService{}
+}
+
+// Use wire.Struct to inject fields
+wire.Struct(new(ThirdPartyService), "DB", "Logger")
+```
+
+### 6. Provider Functions as Parameters
+
+Pass provider functions for lazy initialization:
+
+```go
+type UserService struct {
+    dbProvider func() *Database
+}
+
+func ProvideUserService() *UserService {
+    return &UserService{
+        dbProvider: sync.OnceValue(func() *Database {
+            return connectDatabase()
+        }),
+    }
+}
+```
+
+---
+
+## Best Practices
+
+### ✅ DO
+
+1. **Organize Providers by Layer**
+   ```
+   internal/provider/
+   ├── config.go         # Configuration providers
+   ├── infrastructure.go # Database, cache, logger
+   ├── repository.go     # Data access layer
+   ├── service.go        # Business logic
+   └── handler.go        # HTTP handlers
+   ```
+
+2. **Use Provider Sets for Modularity**
+   ```go
+   var DatabaseSet = wire.NewSet(
+       ProvideDatabase,
+       ProvideUserRepo,
+       ProvideProductRepo,
+   )
+   ```
+
+3. **Return Errors from Providers**
+   ```go
+   func ProvideDatabase() (*Database, error) {
+       // Always handle errors properly
+   }
+   ```
+
+4. **Keep Injector Files Simple**
+   ```go
+   // wire.go should only declare dependencies
+   func InitializeApp() *App {
+       wire.Build(...)
+       return nil
+   }
+   ```
+
+5. **Version Control wire_gen.go**
+   - Commit `wire_gen.go` to avoid build issues in CI/CD
+   - Reviewers can see what changed
+
+### ❌ DON'T
+
+1. **Don't Modify wire_gen.go Manually**
+   - It's regenerated every time you run `wire`
+
+2. **Don't Use Globals in Providers**
+   ```go
+   // ❌ BAD
+   var globalDB *Database
+   func ProvideUserRepo() *UserRepo {
+       return &UserRepo{db: globalDB}
+   }
+   ```
+
+3. **Don't Create Circular Dependencies**
+   ```go
+   // ❌ Service A depends on B, B depends on A
+   func ProvideServiceA(b *ServiceB) *ServiceA { ... }
+   func ProvideServiceB(a *ServiceA) *ServiceB { ... }
+   // Wire will detect this and error
+   ```
+
+4. **Don't Overuse wire.Struct**
+   - Prefer explicit constructors for better encapsulation
+
+5. **Don't Skip Error Handling**
+   ```go
+   // ❌ BAD
+   func ProvideDatabase() *Database {
+       db, _ := sql.Open(...)  // Ignoring error
+       return &Database{db}
+   }
+   ```
+
+---
+
+## Troubleshooting
+
+### Common Errors
+
+#### 1. "unused parameter"
+
+```
+Error: provider has unused parameter: logger
+```
+
+**Cause**: A provider parameter isn't used in the dependency graph.
+
+**Fix**: Either use the parameter or remove it.
+
+#### 2. "no provider found for"
+
+```
+Error: no provider found for *Database needed by ProvideUserRepo
+```
+
+**Cause**: You forgot to include `ProvideDatabase` in `wire.Build()`.
+
+**Fix**: Add the missing provider:
+```go
+wire.Build(
+    ProvideDatabase,  // Add this
+    ProvideUserRepo,
+)
+```
+
+#### 3. "cycle detected"
+
+```
+Error: cycle detected: ProvideA → ProvideB → ProvideA
+```
+
+**Cause**: Circular dependency.
+
+**Fix**: Redesign your architecture to break the cycle.
+
+#### 4. "provider returns multiple values"
+
+```
+Error: provider returns multiple values but wire.Build only expects one
+```
+
+**Cause**: Inconsistent return types in provider set.
+
+**Fix**: Ensure all providers return `(T, error)` or just `T` consistently.
+
+---
+
+## Real-World Example
+
+### Cinema Booking System
+
+**Project Structure**:
+```
+cinema-platform/
+├── cmd/
+│   └── api/
+│       ├── main.go
+│       ├── wire.go
+│       └── wire_gen.go
+├── internal/
+│   ├── provider/
+│   │   ├── config.go
+│   │   ├── infrastructure.go
+│   │   ├── repository.go
+│   │   ├── service.go
+│   │   └── handler.go
+│   ├── service/
+│   │   ├── auth.go
+│   │   ├── movie.go
+│   │   └── booking.go
+│   └── repository/
+│       ├── user.go
+│       └── movie.go
+└── go.mod
+```
+
+**See the full implementation in your `cinema-platform/backend` directory!**
+
+Key highlights:
+- **73 lines in main.go** vs 191 lines before Wire (62% reduction)
+- **8 provider files** organized by layer
+- **Compile-time safety** - catches missing dependencies
+- **Zero runtime overhead** - just plain Go code
+
+---
+
+## Comparison with Alternatives
+
+| Feature | Wire | Uber Fx | Manual DI |
+|---------|------|---------|-----------|
+| **Type** | Compile-time | Runtime | Manual |
+| **Performance** | Zero overhead | Reflection overhead | Zero overhead |
+| **Code Generation** | Yes | No | No |
+| **Error Detection** | Compile-time | Runtime | Compile-time |
+| **Boilerplate** | Auto-generated | Minimal | Lots |
+| **Learning Curve** | Medium | Steep | Easy |
+| **Lifecycle Management** | Manual | Built-in (`OnStart`/`OnStop`) | Manual |
+| **Best For** | Large apps, performance-critical | Apps needing lifecycle hooks | Small apps |
+
+### When to Use Wire
+
+✅ **Use Wire when**:
+- You have 10+ dependencies to manage
+- Performance is critical
+- You want compile-time safety
+- You prefer explicit, readable code
+
+❌ **Don't use Wire when**:
+- Your app has < 5 dependencies
+- You need complex lifecycle management (use Fx)
+- Your team is unfamiliar with code generation
+
+---
+
+## Summary & Next Steps
+
+### What You've Learned
+
+1. **What** dependency injection is and why it matters
+2. **Why** Wire is better than manual DI for large apps
+3. **How** to create providers and injectors
+4. **Advanced** techniques like provider sets, interfaces, and cleanup
+5. **Best practices** for organizing Wire code
+
+### Practice Exercise
+
+Try migrating a simple HTTP API to Wire:
+
+1. Start with 3 layers: Handler → Service → Repository
+2. Create providers for each
+3. Use `wire.Build()` to generate DI code
+4. Add error handling
+5. Organize providers into sets
+
+### Further Reading
+
+- [Official Wire Guide](https://github.com/google/wire/blob/main/docs/guide.md)
+- [Wire Best Practices](https://github.com/google/wire/blob/main/docs/best-practices.md)
+- [Uber's Guide to DI in Go](https://github.com/uber-go/guide/blob/master/style.md#dependency-injection)
+
+---
+
+**Congratulations, you've completed the Google Wire course! 🎉**
+
+You're now equipped to build production-ready Go applications with clean, maintainable dependency injection.
+
+*Generated with ❤️ for the cinema-platform project*
