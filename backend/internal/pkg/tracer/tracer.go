@@ -13,6 +13,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -38,10 +39,9 @@ type Tracer struct {
 // New creates a new tracer instance
 func New(cfg Config) (*Tracer, error) {
 	if !cfg.Enabled {
-		// Use a noop tracer provider to get a noop tracer
-		// If we return nil provider, Shutdown will handle it
+		// Noop Tracer: Là một tracer "giả". Nó vẫn có đủ các hàm Start, End nhưng bên trong không làm gì cả (Empty function)
 		return &Tracer{
-			tracer:  trace.NewNoopTracerProvider().Tracer(cfg.ServiceName),
+			tracer:  noop.NewTracerProvider().Tracer(cfg.ServiceName),
 			enabled: false,
 		}, nil
 	}
@@ -52,7 +52,7 @@ func New(cfg Config) (*Tracer, error) {
 	// Create OTLP exporter
 	var opts []otlptracegrpc.Option
 	opts = append(opts, otlptracegrpc.WithEndpoint(cfg.Endpoint))
-	
+
 	if cfg.Insecure {
 		opts = append(opts, otlptracegrpc.WithDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())))
 		opts = append(opts, otlptracegrpc.WithInsecure())

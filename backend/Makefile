@@ -30,12 +30,14 @@ docker-run:
 	docker-compose up --build
 
 migrate-up:
-	# Add migration command here later
-	echo "Running migrations..."
+	go run ./cmd/migrate/main.go up
 
 migrate-down:
-	# Add rollback command here later
-	echo "Rolling back migrations..."
+	go run ./cmd/migrate/main.go down
+
+migrate-create:
+	@read -p "Enter migration name: " name; \
+	go run ./cmd/migrate/main.go create $${name} sql
 
 lint:
 	golangci-lint run

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"cinemaos-backend/internal/config"
-	"cinemaos-backend/internal/app/entity"
 	"cinemaos-backend/internal/pkg/logger"
 
 	"gorm.io/driver/postgres"
@@ -24,6 +23,9 @@ type Database struct {
 func New(cfg config.DatabaseConfig, log *logger.Logger) (*Database, error) {
 	// Configure GORM logger
 	logLevel := gormlogger.Silent
+	// if cfg.DebugLevel != " " {
+	// 	logLevel = gormlogger.Info
+	// }
 	if cfg.SSLMode == "disable" { // Use debug mode in development
 		logLevel = gormlogger.Info
 	}
@@ -33,6 +35,7 @@ func New(cfg config.DatabaseConfig, log *logger.Logger) (*Database, error) {
 		NowFunc: func() time.Time {
 			return time.Now().UTC()
 		},
+		// Kích hoạt tính năng "Prepared Statement" cache của GORM.
 		PrepareStmt: true,
 	}
 
@@ -49,9 +52,12 @@ func New(cfg config.DatabaseConfig, log *logger.Logger) (*Database, error) {
 	}
 
 	// Configure connection pool
+	// Tối ưu Connection Pool (Formula: n_cores * 2 + effective_spindle_count)
 	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
 	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
 	sqlDB.SetConnMaxLifetime(cfg.ConnMaxLifetime)
+	// Tránh giữ connect quá lâu khi idle, giúp load balancer (nếu có) phân phối lại
+	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
 
 	// Ping database
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -66,36 +72,9 @@ func New(cfg config.DatabaseConfig, log *logger.Logger) (*Database, error) {
 	return &Database{DB: db, logger: log}, nil
 }
 
-// AutoMigrate runs database migrations for all entities
+// AutoMigrate is removed in favor of Goose migrations
 func (d *Database) AutoMigrate() error {
-	d.logger.Info("Running database migrations...")
-
-	err := d.DB.AutoMigrate(
-		// User related
-		&entity.User{},
-		&entity.RefreshToken{},
-		&entity.PasswordResetToken{},
-		&entity.EmailVerificationToken{},
-		
-		// Movie related
-		&entity.Movie{},
-		&entity.Cinema{},
-		&entity.Screen{},
-		&entity.Seat{},
-		
-		// Booking related
-		&entity.Showtime{},
-		&entity.Booking{},
-		&entity.BookingSeat{},
-		&entity.Payment{},
-		&entity.PromoCode{},
-	)
-
-	if err != nil {
-		return fmt.Errorf("migration failed: %w", err)
-	}
-
-	d.logger.Info("Database migrations completed successfully")
+	d.logger.Warn("AutoMigrate is deprecated and disabled. Use 'make migrate-up' instead.")
 	return nil
 }
 

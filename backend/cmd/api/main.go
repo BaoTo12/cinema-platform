@@ -10,21 +10,21 @@ import (
 	"os/signal"
 	"syscall"
 
-	"cinemaos-backend/internal/config"
 	authapp "cinemaos-backend/internal/app/auth"
 	"cinemaos-backend/internal/app/authinfra"
 	cinemaapp "cinemaos-backend/internal/app/cinema"
 	movieapp "cinemaos-backend/internal/app/movie"
-	showtimeapp "cinemaos-backend/internal/app/showtime"
 	"cinemaos-backend/internal/app/postgres"
 	"cinemaos-backend/internal/app/redis"
+	showtimeapp "cinemaos-backend/internal/app/showtime"
+	"cinemaos-backend/internal/config"
 	"cinemaos-backend/internal/handler"
 	"cinemaos-backend/internal/middleware"
-	"cinemaos-backend/internal/router"
-	httpserver "cinemaos-backend/internal/server"
 	"cinemaos-backend/internal/pkg/logger"
 	"cinemaos-backend/internal/pkg/tracer"
 	"cinemaos-backend/internal/pkg/validator"
+	"cinemaos-backend/internal/router"
+	httpserver "cinemaos-backend/internal/server"
 
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
@@ -90,9 +90,10 @@ func main() {
 	}
 	defer db.Close()
 
-	if err := db.AutoMigrate(); err != nil {
-		log.Fatal("Failed to run migrations", zap.Error(err))
-	}
+	// Auto-migration is disabled. Using Goose now.
+	// if err := db.AutoMigrate(); err != nil {
+	// 	log.Fatal("Failed to run migrations", zap.Error(err))
+	// }
 
 	// Initialize Redis
 	// In a real scenario, you'd likely want to handle redis connection failure gracefully if it's optional

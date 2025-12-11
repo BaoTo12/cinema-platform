@@ -38,6 +38,7 @@ const (
 func New(cfg Config) (*Logger, error) {
 	level := parseLevel(cfg.Level)
 
+	// Quyết định hình hài của log (JSON hay Text?)
 	encoderConfig := zapcore.EncoderConfig{
 		TimeKey:        "timestamp",
 		LevelKey:       "level",
@@ -58,9 +59,11 @@ func New(cfg Config) (*Logger, error) {
 		encoder = zapcore.NewJSONEncoder(encoderConfig)
 	} else {
 		encoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+		// TEXT Format
 		encoder = zapcore.NewConsoleEncoder(encoderConfig)
 	}
 
+	// Ghi log vào đâu? (File hay Console?)
 	var writer zapcore.WriteSyncer
 	if cfg.Output == "stdout" || cfg.Output == "" {
 		writer = zapcore.AddSync(os.Stdout)
@@ -79,6 +82,7 @@ func New(cfg Config) (*Logger, error) {
 }
 
 // parseLevel parses string level to zapcore.Level
+// Ghi log cấp độ nào? (Debug, Info...?)
 func parseLevel(level string) zapcore.Level {
 	switch level {
 	case "debug":
@@ -114,12 +118,12 @@ func (l *Logger) WithContext(ctx context.Context) *Logger {
 }
 
 // WithField adds a field to the logger
-func (l *Logger) WithField(key string, value interface{}) *Logger {
+func (l *Logger) WithField(key string, value any) *Logger {
 	return &Logger{Logger: l.With(zap.Any(key, value))}
 }
 
 // WithFields adds multiple fields to the logger
-func (l *Logger) WithFields(fields map[string]interface{}) *Logger {
+func (l *Logger) WithFields(fields map[string]any) *Logger {
 	zapFields := make([]zap.Field, 0, len(fields))
 	for k, v := range fields {
 		zapFields = append(zapFields, zap.Any(k, v))
@@ -194,6 +198,6 @@ func Duration(key string, val time.Duration) zap.Field {
 }
 
 // Any alias for zap.Any
-func Any(key string, val interface{}) zap.Field {
+func Any(key string, val any) zap.Field {
 	return zap.Any(key, val)
 }

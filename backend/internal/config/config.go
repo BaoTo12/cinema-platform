@@ -49,6 +49,7 @@ type DatabaseConfig struct {
 	MaxOpenConns    int           `mapstructure:"max_open_conns"`
 	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
 	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
+	DebugLevel      string        `mapstrucutre:"debug_level"`
 }
 
 // DSN returns the database connection string
@@ -77,13 +78,13 @@ func (r *RedisConfig) Address() string {
 
 // JWTConfig holds JWT configuration
 type JWTConfig struct {
-	AccessSecret        string        `mapstructure:"access_secret"`
-	RefreshSecret       string        `mapstructure:"refresh_secret"`
-	AccessTokenExpiry   time.Duration `mapstructure:"access_token_expiry"`
-	RefreshTokenExpiry  time.Duration `mapstructure:"refresh_token_expiry"`
-	ResetTokenExpiry    time.Duration `mapstructure:"reset_token_expiry"`
-	VerifyTokenExpiry   time.Duration `mapstructure:"verify_token_expiry"`
-	Issuer              string        `mapstructure:"issuer"`
+	AccessSecret       string        `mapstructure:"access_secret"`
+	RefreshSecret      string        `mapstructure:"refresh_secret"`
+	AccessTokenExpiry  time.Duration `mapstructure:"access_token_expiry"`
+	RefreshTokenExpiry time.Duration `mapstructure:"refresh_token_expiry"`
+	ResetTokenExpiry   time.Duration `mapstructure:"reset_token_expiry"`
+	VerifyTokenExpiry  time.Duration `mapstructure:"verify_token_expiry"`
+	Issuer             string        `mapstructure:"issuer"`
 }
 
 // CORSConfig holds CORS configuration
@@ -98,18 +99,18 @@ type CORSConfig struct {
 
 // LoggerConfig holds logging configuration
 type LoggerConfig struct {
-	Level      string `mapstructure:"level"`      // debug, info, warn, error
-	Format     string `mapstructure:"format"`     // json, console
-	Output     string `mapstructure:"output"`     // stdout, file path
+	Level      string `mapstructure:"level"`  // debug, info, warn, error
+	Format     string `mapstructure:"format"` // json, console
+	Output     string `mapstructure:"output"` // stdout, file path
 	TimeFormat string `mapstructure:"time_format"`
 }
 
 // TracerConfig holds OpenTelemetry tracing configuration
 type TracerConfig struct {
-	Enabled     bool   `mapstructure:"enabled"`
-	ServiceName string `mapstructure:"service_name"`
-	Endpoint    string `mapstructure:"endpoint"`
-	Insecure    bool   `mapstructure:"insecure"`
+	Enabled     bool    `mapstructure:"enabled"`
+	ServiceName string  `mapstructure:"service_name"`
+	Endpoint    string  `mapstructure:"endpoint"`
+	Insecure    bool    `mapstructure:"insecure"`
 	SampleRate  float64 `mapstructure:"sample_rate"`
 }
 
@@ -135,11 +136,12 @@ func Load(configPath string) (*Config, error) {
 	if configPath != "" {
 		v.SetConfigFile(configPath)
 	} else {
-		v.SetConfigName("config")
-		v.SetConfigType("yaml")
-		v.AddConfigPath(".")
-		v.AddConfigPath("./config")
-		v.AddConfigPath("/etc/cinemaos/")
+		v.SetConfigName("config")         // Tên file là config (không cần đuôi .yaml)
+		v.SetConfigType("yaml")           // Ép kiểu là yaml
+		v.AddConfigPath(".")              // Tìm ở thư mục hiện tại
+		v.AddConfigPath("./config")       // Tìm trong folder config
+		v.AddConfigPath("/etc/cinemaos/") // Tìm trong thư mục hệ thống (Linux/AWS)
+		// Nơi nào thấy file config.yaml trước thì nó dừng lại và dùng file đó.
 	}
 
 	// Read config file
